@@ -1,0 +1,257 @@
+-- AR2 Target Lock v3 — VirtualInputManager method
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local VIM = game:GetService("VirtualInputManager")
+
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+
+local Config = {
+    AimEnabled = false,
+    ESPEnabled = true,
+    FOV        = 150,
+    Smoothness = 0.15,
+}
+
+-- GUI Parent
+local guiParent
+pcall(function()
+    local cg = game:GetService("CoreGui")
+    local t = Instance.new("ScreenGui"); t.Parent = cg; t:Destroy()
+    guiParent = cg
+end)
+if not guiParent then guiParent = LocalPlayer:WaitForChild("PlayerGui") end
+for _, n in ipairs({"AR2_UI","AR2_FOV"}) do
+    local o = guiParent:FindFirstChild(n); if o then o:Destroy() end
+end
+
+-- Helpers
+local function getHP(p)
+    local c = p.Character; if not c then return 0,100 end
+    local h = c:FindFirstChildOfClass("Humanoid")
+    if h then return math.floor(h.Health), math.floor(h.MaxHealth) end
+    return 0,100
+end
+local function getHPColor(hp,max)
+    local p = hp/math.max(max,1)
+    if p>0.6 then return Color3.fromRGB(80,255,80)
+    elseif p>0.3 then return Color3.fromRGB(255,200,0)
+    else return Color3.fromRGB(255,60,60) end
+end
+local function getDist(root)
+    local c = LocalPlayer.Character; if not c then return 0 end
+    local r = c:FindFirstChild("HumanoidRootPart"); if not r then return 0 end
+    return math.floor((root.Position-r.Position).Magnitude)
+end
+local function isDead(p)
+    local c = p.Character; if not c then return true end
+    local h = c:FindFirstChildOfClass("Humanoid")
+    return not h or h.Health <= 0
+end
+
+-- GUI
+local SG = Instance.new("ScreenGui")
+SG.Name="AR2_UI"; SG.ResetOnSpawn=false; SG.Parent=guiParent
+local Frame = Instance.new("Frame",SG)
+Frame.Size=UDim2.new(0,230,0,255); Frame.Position=UDim2.new(0,20,0.5,-127)
+Frame.BackgroundColor3=Color3.fromRGB(12,12,18); Frame.BorderSizePixel=0
+Frame.Active=true; Frame.Draggable=true
+Instance.new("UICorner",Frame).CornerRadius=UDim.new(0,8)
+local fst=Instance.new("UIStroke",Frame); fst.Color=Color3.fromRGB(60,80,140); fst.Thickness=1.2
+local TB=Instance.new("Frame",Frame); TB.Size=UDim2.new(1,0,0,34)
+TB.BackgroundColor3=Color3.fromRGB(20,24,44); TB.BorderSizePixel=0
+Instance.new("UICorner",TB).CornerRadius=UDim.new(0,8)
+local TFix=Instance.new("Frame",TB); TFix.Size=UDim2.new(1,0,0,10); TFix.Position=UDim2.new(0,0,1,-10)
+TFix.BackgroundColor3=Color3.fromRGB(20,24,44); TFix.BorderSizePixel=0
+local TL=Instance.new("TextLabel",TB); TL.Size=UDim2.new(1,-10,1,0); TL.Position=UDim2.new(0,12,0,0)
+TL.BackgroundTransparency=1; TL.Text="☣  AR2  |  Target Lock"
+TL.TextColor3=Color3.fromRGB(180,210,255); TL.TextSize=13
+TL.Font=Enum.Font.GothamBold; TL.TextXAlignment=Enum.TextXAlignment.Left
+local pad=Instance.new("UIPadding",Frame)
+pad.PaddingTop=UDim.new(0,42); pad.PaddingLeft=UDim.new(0,12)
+pad.PaddingRight=UDim.new(0,12); pad.PaddingBottom=UDim.new(0,12)
+local layout=Instance.new("UIListLayout",Frame)
+layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Padding=UDim.new(0,10)
+
+local function makeToggle(text,order,configKey)
+    local row=Instance.new("Frame",Frame); row.Size=UDim2.new(1,0,0,28)
+    row.BackgroundTransparency=1; row.LayoutOrder=order
+    local lbl=Instance.new("TextLabel",row); lbl.Size=UDim2.new(0.65,0,1,0)
+    lbl.BackgroundTransparency=1; lbl.Text=text; lbl.TextColor3=Color3.fromRGB(200,210,255)
+    lbl.TextSize=12; lbl.Font=Enum.Font.GothamSemibold; lbl.TextXAlignment=Enum.TextXAlignment.Left
+    local btn=Instance.new("TextButton",row); btn.Size=UDim2.new(0,44,0,22)
+    btn.Position=UDim2.new(1,-44,0.5,-11); btn.BackgroundColor3=Color3.fromRGB(50,50,70)
+    btn.Text=""; btn.AutoButtonColor=false
+    Instance.new("UICorner",btn).CornerRadius=UDim.new(1,0)
+    local circle=Instance.new("Frame",btn); circle.Size=UDim2.new(0,16,0,16)
+    circle.Position=UDim2.new(0,3,0.5,-8); circle.BackgroundColor3=Color3.fromRGB(130,130,160)
+    Instance.new("UICorner",circle).CornerRadius=UDim.new(1,0)
+    local function refresh()
+        if Config[configKey] then
+            btn.BackgroundColor3=Color3.fromRGB(60,100,220)
+            circle.BackgroundColor3=Color3.fromRGB(255,255,255)
+            circle:TweenPosition(UDim2.new(1,-19,0.5,-8),"Out","Quad",0.12,true)
+        else
+            btn.BackgroundColor3=Color3.fromRGB(50,50,70)
+            circle.BackgroundColor3=Color3.fromRGB(130,130,160)
+            circle:TweenPosition(UDim2.new(0,3,0.5,-8),"Out","Quad",0.12,true)
+        end
+    end
+    refresh()
+    btn.MouseButton1Click:Connect(function() Config[configKey]=not Config[configKey]; refresh() end)
+end
+
+local function makeSlider(text,order,mn,mx,def,dec,configKey)
+    local row=Instance.new("Frame",Frame); row.Size=UDim2.new(1,0,0,46)
+    row.BackgroundTransparency=1; row.LayoutOrder=order
+    local top=Instance.new("Frame",row); top.Size=UDim2.new(1,0,0,14); top.BackgroundTransparency=1
+    local nl=Instance.new("TextLabel",top); nl.Size=UDim2.new(0.6,0,1,0); nl.BackgroundTransparency=1
+    nl.Text=text; nl.TextColor3=Color3.fromRGB(200,210,255); nl.TextSize=12
+    nl.Font=Enum.Font.GothamSemibold; nl.TextXAlignment=Enum.TextXAlignment.Left
+    local vl=Instance.new("TextLabel",top); vl.Size=UDim2.new(0.4,0,1,0); vl.Position=UDim2.new(0.6,0,0,0)
+    vl.BackgroundTransparency=1; vl.Text=tostring(def); vl.TextColor3=Color3.fromRGB(100,160,255)
+    vl.TextSize=11; vl.Font=Enum.Font.GothamBold; vl.TextXAlignment=Enum.TextXAlignment.Right
+    local track=Instance.new("Frame",row); track.Size=UDim2.new(1,0,0,6); track.Position=UDim2.new(0,0,0,26)
+    track.BackgroundColor3=Color3.fromRGB(35,35,55); track.BorderSizePixel=0
+    Instance.new("UICorner",track).CornerRadius=UDim.new(1,0)
+    local fill=Instance.new("Frame",track); fill.Size=UDim2.new((def-mn)/(mx-mn),0,1,0)
+    fill.BackgroundColor3=Color3.fromRGB(60,100,220); fill.BorderSizePixel=0
+    Instance.new("UICorner",fill).CornerRadius=UDim.new(1,0)
+    local thumb=Instance.new("Frame",track); thumb.Size=UDim2.new(0,12,0,12)
+    thumb.Position=UDim2.new((def-mn)/(mx-mn),-6,0.5,-6)
+    thumb.BackgroundColor3=Color3.fromRGB(180,200,255); thumb.BorderSizePixel=0; thumb.ZIndex=5
+    Instance.new("UICorner",thumb).CornerRadius=UDim.new(1,0)
+    local drag=false
+    local function upd(x)
+        local rel=math.clamp((x-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
+        local v=math.floor((mn+rel*(mx-mn))*10^dec+0.5)/10^dec
+        fill.Size=UDim2.new(rel,0,1,0); thumb.Position=UDim2.new(rel,-6,0.5,-6)
+        vl.Text=tostring(v); Config[configKey]=v
+    end
+    thumb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true end end)
+    UserInputService.InputChanged:Connect(function(i) if drag and i.UserInputType==Enum.UserInputType.MouseMovement then upd(i.Position.X) end end)
+    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
+    track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true upd(i.Position.X) end end)
+end
+
+makeToggle("Aim Lock [F]",1,"AimEnabled")
+makeToggle("ESP",2,"ESPEnabled")
+makeSlider("FOV (px)",3,50,500,Config.FOV,0,"FOV")
+makeSlider("Smoothness",4,0.01,0.5,Config.Smoothness,2,"Smoothness")
+
+-- FOV Circle
+local FSG=Instance.new("ScreenGui"); FSG.Name="AR2_FOV"; FSG.ResetOnSpawn=false; FSG.Parent=guiParent
+local Circle=Instance.new("Frame",FSG); Circle.BackgroundTransparency=1; Circle.BorderSizePixel=0
+local cs=Instance.new("UIStroke",Circle); cs.Color=Color3.fromRGB(80,120,255); cs.Thickness=1.5; cs.Transparency=0.35
+Instance.new("UICorner",Circle).CornerRadius=UDim.new(1,0)
+
+-- ESP
+local espData={}
+local function removeESP(p)
+    local d=espData[p]; if not d then return end
+    pcall(function() d.hl:Destroy() end); pcall(function() d.bb:Destroy() end); espData[p]=nil
+end
+local function updateESP(p,isTarget)
+    if not Config.ESPEnabled then removeESP(p); return end
+    local char=p.Character; if not char or isDead(p) then removeESP(p); return end
+    local root=char:FindFirstChild("HumanoidRootPart"); if not root then return end
+    local d=espData[p]
+    if not d then
+        local hl=Instance.new("Highlight"); hl.FillTransparency=0.5; hl.OutlineTransparency=0
+        hl.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+        local bb=Instance.new("BillboardGui"); bb.Size=UDim2.new(0,130,0,54)
+        bb.StudsOffset=Vector3.new(0,3.5,0); bb.AlwaysOnTop=true
+        local n1=Instance.new("TextLabel",bb); n1.Size=UDim2.new(1,0,0,18); n1.BackgroundTransparency=1
+        n1.Text=p.Name; n1.TextColor3=Color3.fromRGB(255,255,255); n1.TextSize=13
+        n1.Font=Enum.Font.GothamBold; n1.TextStrokeTransparency=0.3; n1.TextStrokeColor3=Color3.fromRGB(0,0,0)
+        local h1=Instance.new("TextLabel",bb); h1.Size=UDim2.new(1,0,0,16); h1.Position=UDim2.new(0,0,0,18)
+        h1.BackgroundTransparency=1; h1.TextSize=11; h1.Font=Enum.Font.GothamSemibold
+        h1.TextStrokeTransparency=0.3; h1.TextStrokeColor3=Color3.fromRGB(0,0,0)
+        local d1=Instance.new("TextLabel",bb); d1.Size=UDim2.new(1,0,0,14); d1.Position=UDim2.new(0,0,0,34)
+        d1.BackgroundTransparency=1; d1.TextSize=10; d1.Font=Enum.Font.Gotham
+        d1.TextColor3=Color3.fromRGB(180,180,220); d1.TextStrokeTransparency=0.3
+        d1.TextStrokeColor3=Color3.fromRGB(0,0,0)
+        d={hl=hl,bb=bb,hpLbl=h1,distLbl=d1}; espData[p]=d
+    end
+    if d.hl.Parent~=char then d.hl.Adornee=char; d.hl.Parent=char end
+    if d.bb.Parent~=root then d.bb.Adornee=root; d.bb.Parent=root end
+    local hp,maxHp=getHP(p)
+    d.hpLbl.Text="❤  "..hp.." / "..maxHp; d.hpLbl.TextColor3=getHPColor(hp,maxHp)
+    d.distLbl.Text="📍 "..getDist(root).." studs"
+    if isTarget then
+        d.hl.FillColor=Color3.fromRGB(255,210,0); d.hl.OutlineColor=Color3.fromRGB(255,255,0); d.hl.FillTransparency=0.2
+    else
+        d.hl.FillColor=Color3.fromRGB(220,50,50); d.hl.OutlineColor=Color3.fromRGB(255,255,255); d.hl.FillTransparency=0.5
+    end
+end
+
+-- ================================================
+--  MAIN LOOP
+-- ================================================
+local lastMousePos = Vector2.new(0,0)
+
+RunService.RenderStepped:Connect(function(dt)
+    local vp = Camera.ViewportSize
+    local r = Config.FOV
+    Circle.Size = UDim2.new(0,r*2,0,r*2)
+    Circle.Position = UDim2.new(0,vp.X/2-r,0,vp.Y/2-r)
+    Circle.Visible = Config.AimEnabled
+
+    local center = Vector2.new(vp.X/2, vp.Y/2)
+    local best, bestDist = nil, math.huge
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        if isDead(p) then removeESP(p); continue end
+        local char = p.Character; if not char then removeESP(p); continue end
+        local root = char:FindFirstChild("HumanoidRootPart"); if not root then continue end
+        if Config.AimEnabled then
+            local sp, on = Camera:WorldToViewportPoint(root.Position)
+            if on then
+                local dist = (Vector2.new(sp.X,sp.Y)-center).Magnitude
+                if dist < Config.FOV and dist < bestDist then best,bestDist=root,dist end
+            end
+        end
+        updateESP(p, root==best)
+    end
+
+    if Config.AimEnabled and best then
+        -- คำนวณ screen position ของ target
+        local sp = Camera:WorldToViewportPoint(best.Position)
+        local targetScreen = Vector2.new(sp.X, sp.Y)
+        local delta = targetScreen - center
+
+        -- ขยับ mouse ไปหา target ทีละนิด (smooth)
+        local moveX = delta.X * Config.Smoothness
+        local moveY = delta.Y * Config.Smoothness
+
+        -- ลอง VirtualInputManager ก่อน
+        local ok = pcall(function()
+            VIM:SendMouseMoveEvent(
+                math.floor(center.X + moveX),
+                math.floor(center.Y + moveY),
+                false, game
+            )
+        end)
+
+        -- ถ้าไม่ได้ลอง mousemoverel
+        if not ok then
+            pcall(function()
+                mousemoverel(moveX, moveY)
+            end)
+        end
+    end
+end)
+
+Players.PlayerRemoving:Connect(removeESP)
+
+UserInputService.InputBegan:Connect(function(inp, gp)
+    if gp then return end
+    if inp.KeyCode == Enum.KeyCode.F then
+        Config.AimEnabled = not Config.AimEnabled
+        print("[AR2] AimLock = " .. tostring(Config.AimEnabled))
+    end
+end)
+
+print("[AR2 v3] Ready! กด F เพื่อ toggle")
