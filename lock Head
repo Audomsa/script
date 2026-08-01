@@ -1,4 +1,4 @@
--- AR2 Target Lock v8 — v3 + Head Lock toggle
+-- AR2 Target Lock v9 — v3 copy paste + head lock 1 line
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -10,7 +10,7 @@ local Camera = workspace.CurrentCamera
 local Config = {
     AimEnabled = false,
     ESPEnabled = true,
-    HeadLock   = false,  -- false = Body, true = Head
+    HeadLock   = false,
     FOV        = 150,
     Smoothness = 0.15,
 }
@@ -134,10 +134,9 @@ local function makeSlider(text,order,mn,mx,def,dec,configKey)
     track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true upd(i.Position.X) end end)
 end
 
--- UI rows — เหมือน v3 ทุกอย่าง + เพิ่ม HeadLock toggle
 makeToggle("Aim Lock [F]", 1, "AimEnabled")
 makeToggle("ESP",          2, "ESPEnabled")
-makeToggle("Head Lock",    3, "HeadLock")   -- << เพิ่มแค่บรรทัดนี้
+makeToggle("Head Lock",    3, "HeadLock")
 makeSlider("FOV (px)",     4, 50, 500, Config.FOV,        0, "FOV")
 makeSlider("Smoothness",   5, 0.01, 0.5, Config.Smoothness, 2, "Smoothness")
 
@@ -188,8 +187,7 @@ local function updateESP(p,isTarget)
 end
 
 -- ================================================
---  MAIN LOOP — v3 ทุกอย่าง
---  เพิ่มแค่: ถ้า HeadLock=true ให้ใช้ Head position แทน root
+--  MAIN LOOP — v3 100% เปลี่ยนแค่ aimPos
 -- ================================================
 RunService.RenderStepped:Connect(function()
     local vp = Camera.ViewportSize
@@ -199,7 +197,8 @@ RunService.RenderStepped:Connect(function()
     Circle.Visible = Config.AimEnabled
 
     local center = Vector2.new(vp.X/2, vp.Y/2)
-    local best, bestDist = nil, math.huge
+    local best, bestDist = nil, math.huge  -- best = root เหมือน v3
+    local bestAimPos = nil                 -- aimPos แยกต่างหาก
 
     for _, p in ipairs(Players:GetPlayers()) do
         if p == LocalPlayer then continue end
@@ -208,7 +207,7 @@ RunService.RenderStepped:Connect(function()
         local root = char:FindFirstChild("HumanoidRootPart"); if not root then continue end
 
         if Config.AimEnabled then
-            -- เพิ่มแค่นี้: เลือก part ตาม HeadLock
+            -- aimPos = Head ถ้า HeadLock, ไม่งั้นใช้ root เหมือนเดิม
             local aimPos = root.Position
             if Config.HeadLock then
                 local head = char:FindFirstChild("Head")
@@ -219,18 +218,19 @@ RunService.RenderStepped:Connect(function()
             if on then
                 local dist = (Vector2.new(sp.X,sp.Y)-center).Magnitude
                 if dist < Config.FOV and dist < bestDist then
-                    best = {part=root, aimPos=aimPos}
+                    best = root        -- ยังเป็น root เหมือน v3
                     bestDist = dist
+                    bestAimPos = aimPos
                 end
             end
         end
 
-        updateESP(p, best and best.part == root)
+        updateESP(p, root == best)  -- เหมือน v3 ทุกอย่าง
     end
 
-    -- ขยับ mouse — เหมือน v3 ทุกอย่าง
+    -- ขยับ mouse — เหมือน v3 ทุกอย่าง แค่ใช้ bestAimPos แทน best.Position
     if Config.AimEnabled and best then
-        local sp = Camera:WorldToViewportPoint(best.aimPos)
+        local sp = Camera:WorldToViewportPoint(bestAimPos)
         local targetScreen = Vector2.new(sp.X, sp.Y)
         local delta = targetScreen - center
         local moveX = delta.X * Config.Smoothness
@@ -258,4 +258,4 @@ UserInputService.InputBegan:Connect(function(inp, gp)
     end
 end)
 
-print("[AR2 v8] Ready! F = toggle | Head Lock toggle ใน UI")
+print("[AR2 v9] Ready! F = toggle | Head Lock toggle ใน UI")
