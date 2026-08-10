@@ -1,11 +1,7 @@
--- Steal a Brainrot Script
--- Auto Steal (E interact) + Noclip
+-- Steal a Brainrot Script v2
+-- Auto Steal (Hold E) + Noclip
 
--- ป้องกัน script รันซ้ำเมื่อ respawn
-if _G.SAB_LOADED then
-    print("[SAB] Already loaded! ไม่รันซ้ำ")
-    return
-end
+if _G.SAB_LOADED then print("[SAB] Already loaded!"); return end
 _G.SAB_LOADED = true
 
 local Players = game:GetService("Players")
@@ -13,13 +9,12 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
 local Config = {
     AutoSteal  = false,
     Noclip     = false,
-    StealRange = 10,    -- ระยะห่าง studs ที่จะ interact
-    Speed      = 16,    -- ความเร็วปกติ = 16
+    StealRange = 15,
+    Speed      = 16,
 }
 
 -- GUI Parent
@@ -30,23 +25,17 @@ pcall(function()
     guiParent = cg
 end)
 if not guiParent then guiParent = LocalPlayer:WaitForChild("PlayerGui") end
-for _, n in ipairs({"SAB_UI"}) do
-    local o = guiParent:FindFirstChild(n); if o then o:Destroy() end
-end
+local old = guiParent:FindFirstChild("SAB_UI"); if old then old:Destroy() end
 
--- ================================================
---  GUI
--- ================================================
+-- GUI
 local SG = Instance.new("ScreenGui")
 SG.Name="SAB_UI"; SG.ResetOnSpawn=false; SG.Parent=guiParent
-
 local Frame = Instance.new("Frame",SG)
 Frame.Size=UDim2.new(0,230,0,280); Frame.Position=UDim2.new(0,20,0.5,-140)
 Frame.BackgroundColor3=Color3.fromRGB(12,12,18); Frame.BorderSizePixel=0
 Frame.Active=true; Frame.Draggable=true
 Instance.new("UICorner",Frame).CornerRadius=UDim.new(0,8)
 local fst=Instance.new("UIStroke",Frame); fst.Color=Color3.fromRGB(100,60,140); fst.Thickness=1.2
-
 local TB=Instance.new("Frame",Frame); TB.Size=UDim2.new(1,0,0,34)
 TB.BackgroundColor3=Color3.fromRGB(24,16,40); TB.BorderSizePixel=0
 Instance.new("UICorner",TB).CornerRadius=UDim.new(0,8)
@@ -56,7 +45,6 @@ local TL=Instance.new("TextLabel",TB); TL.Size=UDim2.new(1,-10,1,0); TL.Position
 TL.BackgroundTransparency=1; TL.Text="🧠  Steal a Brainrot"
 TL.TextColor3=Color3.fromRGB(210,180,255); TL.TextSize=13
 TL.Font=Enum.Font.GothamBold; TL.TextXAlignment=Enum.TextXAlignment.Left
-
 local pad=Instance.new("UIPadding",Frame)
 pad.PaddingTop=UDim.new(0,42); pad.PaddingLeft=UDim.new(0,12)
 pad.PaddingRight=UDim.new(0,12); pad.PaddingBottom=UDim.new(0,12)
@@ -89,7 +77,6 @@ local function makeToggle(text,order,configKey)
     end
     refresh()
     btn.MouseButton1Click:Connect(function() Config[configKey]=not Config[configKey]; refresh() end)
-    return refresh
 end
 
 local function makeSlider(text,order,mn,mx,def,dec,configKey)
@@ -133,75 +120,49 @@ makeSlider("Speed",          4, 16, 100, Config.Speed,    0, "Speed")
 -- ================================================
 --  NOCLIP
 -- ================================================
-local noclipConn
+local noclipConn = nil
 local function setNoclip(state)
     Config.Noclip = state
     if state then
+        if noclipConn then noclipConn:Disconnect() end
         noclipConn = RunService.Stepped:Connect(function()
-            local char = LocalPlayer.Character
-            if not char then return end
+            local char = LocalPlayer.Character; if not char then return end
             for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.CanCollide = false
-                end
+                if p:IsA("BasePart") then p.CanCollide = false end
             end
         end)
     else
         if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
-        -- restore collision
-        local char = LocalPlayer.Character
-        if char then
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then
-                    p.CanCollide = true
-                end
-            end
+        local char = LocalPlayer.Character; if not char then return end
+        for _, p in ipairs(char:GetDescendants()) do
+            if p:IsA("BasePart") then p.CanCollide = true end
         end
     end
 end
 
 -- ================================================
---  SPEED + รองรับ respawn
+--  SPEED
 -- ================================================
-local function onCharacterAdded(char)
-    -- reset noclip collision เมื่อ respawn
-    if Config.Noclip and noclipConn then
-        noclipConn:Disconnect(); noclipConn = nil
-        setNoclip(true) -- เปิดใหม่กับ character ใหม่
-    end
-end
-LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
-
 RunService.Heartbeat:Connect(function()
-    local char = LocalPlayer.Character
-    if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.WalkSpeed = Config.Speed
-    end
+    local char = LocalPlayer.Character; if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    hum.WalkSpeed = Config.Speed
 end)
 
 -- ================================================
---  AUTO STEAL
+--  AUTO STEAL — Hold E จนครบ HoldDuration
 -- ================================================
-local function findNearestBrainrot()
-    local myChar = LocalPlayer.Character
-    if not myChar then return nil end
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart")
-    if not myRoot then return nil end
-
+local function findNearestPrompt()
+    local myChar = LocalPlayer.Character; if not myChar then return nil end
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart"); if not myRoot then return nil end
     local best, bestDist = nil, math.huge
-
-    -- สแกน workspace หา object ที่ชื่อมี "Brainrot" หรือ interact ได้
     for _, obj in ipairs(workspace:GetDescendants()) do
-        -- หา ProximityPrompt (ปุ่ม E interact)
-        if obj:IsA("ProximityPrompt") then
+        if obj:IsA("ProximityPrompt") and obj.Enabled then
             local part = obj.Parent
             if part and part:IsA("BasePart") then
                 local dist = (part.Position - myRoot.Position).Magnitude
-                if dist < Config.StealRange and dist < bestDist then
-                    best = obj
-                    bestDist = dist
+                if dist <= Config.StealRange and dist < bestDist then
+                    best = obj; bestDist = dist
                 end
             end
         end
@@ -209,28 +170,49 @@ local function findNearestBrainrot()
     return best
 end
 
-local stealCooldown = false
+local holding = false
 RunService.Heartbeat:Connect(function()
-    if not Config.AutoSteal then return end
-    if stealCooldown then return end
+    if not Config.AutoSteal then
+        holding = false
+        return
+    end
 
-    local prompt = findNearestBrainrot()
-    if not prompt then return end
+    local prompt = findNearestPrompt()
+    if not prompt then holding = false; return end
 
-    stealCooldown = true
-    -- Fire ProximityPrompt เหมือนกด E
-    pcall(function()
-        fireproximityprompt(prompt)
-    end)
+    if not holding then
+        holding = true
+        -- เริ่ม hold prompt
+        pcall(function()
+            -- วิธีที่ 1: fireproximityprompt ตรงๆ (executor function)
+            fireproximityprompt(prompt)
+        end)
 
-    -- ถ้า fireproximityprompt ไม่มี ลองใช้วิธีอื่น
-    pcall(function()
-        local evnt = prompt:FindFirstChild("TriggerEnded") or prompt.Triggered
-        if evnt then evnt:Fire(LocalPlayer) end
-    end)
-
-    task.wait(0.5) -- cooldown ป้องกัน spam
-    stealCooldown = false
+        -- วิธีที่ 2: trigger ผ่าน holdDuration loop
+        pcall(function()
+            local holdTime = prompt.HoldDuration
+            if holdTime <= 0 then
+                -- กดครั้งเดียวพอ
+                prompt.Triggered:Fire(LocalPlayer)
+            else
+                -- ต้องค้างไว้ตาม holdTime
+                local elapsed = 0
+                local conn
+                conn = RunService.Heartbeat:Connect(function(dt)
+                    if not Config.AutoSteal then conn:Disconnect(); holding=false; return end
+                    elapsed = elapsed + dt
+                    -- ส่ง InputBegan ซ้ำๆ เพื่อจำลองการค้าง
+                    pcall(function() prompt:InputHoldBegin() end)
+                    if elapsed >= holdTime + 0.1 then
+                        pcall(function() prompt:InputHoldEnd() end)
+                        conn:Disconnect()
+                        task.wait(0.3)
+                        holding = false
+                    end
+                end)
+            end
+        end)
+    end
 end)
 
 -- ================================================
@@ -248,14 +230,4 @@ UserInputService.InputBegan:Connect(function(inp, gp)
     end
 end)
 
--- sync noclip toggle กับ UI
-local _, noclipRefresh = pcall(function() end)
--- re-hook toggle button กับ setNoclip
-for _, v in ipairs(Frame:GetDescendants()) do
-    if v:IsA("TextButton") and v.Parent and v.Parent:IsA("Frame") then
-        -- จะ sync อัตโนมัติผ่าน Config.Noclip ใน RunService
-    end
-end
-
-print("[SAB] Steal a Brainrot โหลดแล้ว!")
-print("G = Auto Steal | X = Noclip")
+print("[SAB] Loaded! G = Auto Steal | X = Noclip")
