@@ -1,0 +1,581 @@
+--========================================================
+-- BRAINROT DEBUG / SCANNER
+-- สำหรับ Roblox Studio / เกมที่คุณเป็นเจ้าของ
+--========================================================
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+local selectedTarget = nil
+local homeCFrame = nil
+
+--========================================================
+-- HELPERS
+--========================================================
+
+local function getCharacter()
+	return LocalPlayer.Character
+end
+
+local function getRoot()
+	local char = getCharacter()
+	return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function getPosition(obj)
+	if not obj then
+		return nil
+	end
+
+	if obj:IsA("BasePart") then
+		return obj.Position
+	end
+
+	if obj:IsA("Model") then
+		return obj:GetPivot().Position
+	end
+
+	local part = obj:FindFirstChildWhichIsA("BasePart", true)
+	return part and part.Position
+end
+
+local function getValue(obj)
+	return obj:GetAttribute("Value")
+		or obj:GetAttribute("Price")
+		or obj:GetAttribute("Worth")
+		or "?"
+end
+
+local function getOwner(obj)
+	return obj:GetAttribute("Owner")
+		or obj:GetAttribute("OwnerUserId")
+		or "?"
+end
+
+--========================================================
+-- GUI
+--========================================================
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "BrainrotDebugUI"
+gui.ResetOnSpawn = false
+gui.Parent = PlayerGui
+
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(600, 500)
+main.Position = UDim2.new(0.5, -300, 0.5, -250)
+main.BackgroundColor3 = Color3.fromRGB(24,24,28)
+main.BorderSizePixel = 0
+main.Parent = gui
+
+Instance.new("UICorner", main).CornerRadius = UDim.new(0,10)
+
+--========================================================
+-- TITLE
+--========================================================
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1,-50,0,40)
+title.Position = UDim2.fromOffset(12,5)
+title.BackgroundTransparency = 1
+title.Text = "Brainrot Debug Scanner"
+title.TextColor3 = Color3.new(1,1,1)
+title.TextSize = 18
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = main
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(32,28)
+close.Position = UDim2.new(1,-42,0,8)
+close.BackgroundColor3 = Color3.fromRGB(170,55,55)
+close.Text = "X"
+close.TextColor3 = Color3.new(1,1,1)
+close.Font = Enum.Font.GothamBold
+close.BorderSizePixel = 0
+close.Parent = main
+
+Instance.new("UICorner",close).CornerRadius = UDim.new(0,5)
+
+close.MouseButton1Click:Connect(function()
+	gui.Enabled = false
+end)
+
+--========================================================
+-- STATUS
+--========================================================
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1,-20,0,32)
+status.Position = UDim2.fromOffset(10,48)
+status.BackgroundColor3 = Color3.fromRGB(38,38,44)
+status.Text = "Ready"
+status.TextColor3 = Color3.fromRGB(180,180,180)
+status.TextSize = 12
+status.Font = Enum.Font.Gotham
+status.TextXAlignment = Enum.TextXAlignment.Left
+status.Parent = main
+
+Instance.new("UICorner",status).CornerRadius = UDim.new(0,6)
+
+--========================================================
+-- BUTTON
+--========================================================
+
+local function makeButton(text,x,width)
+	local b = Instance.new("TextButton")
+
+	b.Size = UDim2.fromOffset(width,34)
+	b.Position = UDim2.fromOffset(x,88)
+
+	b.BackgroundColor3 = Color3.fromRGB(50,50,58)
+	b.Text = text
+	b.TextColor3 = Color3.new(1,1,1)
+	b.TextSize = 12
+	b.Font = Enum.Font.GothamBold
+	b.BorderSizePixel = 0
+	b.Parent = main
+
+	Instance.new("UICorner",b).CornerRadius = UDim.new(0,6)
+
+	return b
+end
+
+local dumpButton = makeButton("Dump",10,80)
+local scanButton = makeButton("Scan",96,80)
+local homeButton = makeButton("Set Home",182,90)
+local returnButton = makeButton("Return",278,80)
+
+--========================================================
+-- RESULT LIST
+--========================================================
+
+local list = Instance.new("ScrollingFrame")
+list.Size = UDim2.new(1,-20,0,300)
+list.Position = UDim2.fromOffset(10,130)
+list.BackgroundColor3 = Color3.fromRGB(13,13,16)
+list.BorderSizePixel = 0
+list.ScrollBarThickness = 6
+list.Parent = main
+
+Instance.new("UICorner",list).CornerRadius = UDim.new(0,6)
+
+local layout = Instance.new("UIListLayout")
+layout.Padding = UDim.new(0,4)
+layout.Parent = list
+
+local padding = Instance.new("UIPadding")
+padding.PaddingTop = UDim.new(0,6)
+padding.PaddingLeft = UDim.new(0,6)
+padding.PaddingRight = UDim.new(0,6)
+padding.Parent = list
+
+--========================================================
+-- LOG
+--========================================================
+
+local logBox = Instance.new("TextLabel")
+logBox.Size = UDim2.new(1,-20,0,45)
+logBox.Position = UDim2.fromOffset(10,440)
+logBox.BackgroundTransparency = 1
+logBox.Text = "Log: Ready"
+logBox.TextColor3 = Color3.fromRGB(150,150,150)
+logBox.TextSize = 11
+logBox.Font = Enum.Font.Code
+logBox.TextXAlignment = Enum.TextXAlignment.Left
+logBox.TextWrapped = true
+logBox.Parent = main
+
+local function log(msg)
+	logBox.Text = "Log: " .. tostring(msg)
+end
+
+--========================================================
+-- CLEAR LIST
+--========================================================
+
+local function clearList()
+	for _, child in ipairs(list:GetChildren()) do
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+end
+
+--========================================================
+-- ADD RESULT
+--========================================================
+
+local function addResult(obj, owner, value, distance)
+
+	local button = Instance.new("TextButton")
+
+	button.Size = UDim2.new(1,-4,0,44)
+	button.BackgroundColor3 = Color3.fromRGB(38,38,44)
+	button.BorderSizePixel = 0
+
+	button.Text =
+		"🧠 "
+		.. obj.Name
+		.. "   | Value: "
+		.. tostring(value)
+		.. "   | "
+		.. tostring(math.floor(distance))
+		.. " studs"
+
+	button.TextColor3 = Color3.fromRGB(220,220,220)
+	button.TextSize = 11
+	button.Font = Enum.Font.Gotham
+	button.TextXAlignment = Enum.TextXAlignment.Left
+
+	button.Parent = list
+
+	Instance.new("UICorner",button).CornerRadius =
+		UDim.new(0,5)
+
+	button.MouseButton1Click:Connect(function()
+
+		selectedTarget = obj
+
+		status.Text =
+			"Selected: "
+			.. obj.Name
+
+		status.TextColor3 =
+			Color3.fromRGB(100,180,255)
+
+		log(
+			"Selected "
+			.. obj:GetFullName()
+			.. " | Owner="
+			.. tostring(owner)
+		)
+	end)
+end
+
+--========================================================
+-- DUMP
+--========================================================
+
+local function dumpWorkspace()
+
+	log("Dumping Workspace...")
+
+	print("========== WORKSPACE DUMP ==========")
+
+	local count = 0
+
+	for _, obj in ipairs(
+		workspace:GetDescendants()
+	) do
+
+		count += 1
+
+		print(
+			obj.ClassName,
+			obj:GetFullName()
+		)
+	end
+
+	print(
+		"========== TOTAL: "
+		.. count
+		.. " =========="
+	)
+
+	status.Text =
+		"Dump complete: "
+		.. count
+		.. " instances"
+
+	log(
+		"Dumped "
+		.. count
+		.. " instances to Output"
+	)
+end
+
+--========================================================
+-- SCAN
+--========================================================
+
+local function scan()
+
+	clearList()
+
+	local root = getRoot()
+
+	if not root then
+		status.Text = "Character not ready"
+		return
+	end
+
+	local found = 0
+
+	-- พยายามหาโฟลเดอร์ Bases
+	local bases = workspace:FindFirstChild("Bases")
+
+	if bases then
+
+		for _, base in ipairs(
+			bases:GetChildren()
+		) do
+
+			local basePos = getPosition(base)
+
+			if basePos then
+
+				for _, obj in ipairs(
+					base:GetDescendants()
+				) do
+
+					if obj:IsA("Model")
+						or obj:IsA("BasePart") then
+
+						local value =
+							getValue(obj)
+
+						local owner =
+							getOwner(base)
+
+						local pos =
+							getPosition(obj)
+
+						if pos then
+
+							local distance =
+								(root.Position - pos).Magnitude
+
+							-- แสดงเฉพาะ object ที่มี
+							-- Value / Price / Worth
+							if obj:GetAttribute("Value")
+								or obj:GetAttribute("Price")
+								or obj:GetAttribute("Worth") then
+
+								found += 1
+
+								addResult(
+									obj,
+									owner,
+									value,
+									distance
+								)
+							end
+						end
+					end
+				end
+			end
+		end
+
+	else
+
+		-- fallback:
+		-- scan object ที่มี Value attribute
+		for _, obj in ipairs(
+			workspace:GetDescendants()
+		) do
+
+			if obj:GetAttribute("Value")
+				or obj:GetAttribute("Price")
+				or obj:GetAttribute("Worth") then
+
+				local pos = getPosition(obj)
+
+				if pos then
+
+					local distance =
+						(root.Position - pos).Magnitude
+
+					found += 1
+
+					addResult(
+						obj,
+						getOwner(obj),
+						getValue(obj),
+						distance
+					)
+				end
+			end
+		end
+	end
+
+	task.wait()
+
+	list.CanvasSize =
+		UDim2.fromOffset(
+			0,
+			layout.AbsoluteContentSize.Y + 15
+		)
+
+	status.Text =
+		"Found "
+		.. found
+		.. " possible Brainrot(s)"
+
+	status.TextColor3 =
+		Color3.fromRGB(100,220,130)
+
+	log(
+		"Scan complete: "
+		.. found
+		.. " target(s)"
+	)
+end
+
+--========================================================
+-- HOME
+--========================================================
+
+homeButton.MouseButton1Click:Connect(function()
+
+	local root = getRoot()
+
+	if not root then
+		return
+	end
+
+	homeCFrame = root.CFrame
+
+	status.Text = "Home position saved"
+	status.TextColor3 =
+		Color3.fromRGB(100,220,130)
+
+	log("Home position saved")
+end)
+
+returnButton.MouseButton1Click:Connect(function()
+
+	local root = getRoot()
+
+	if not root or not homeCFrame then
+		status.Text = "Home position not set"
+		return
+	end
+
+	root.CFrame = homeCFrame
+
+	status.Text = "Returned Home"
+	log("Returned to saved Home")
+end)
+
+--========================================================
+-- SELECTED TARGET TELEPORT
+--========================================================
+
+scanButton.MouseButton1Click:Connect(function()
+	scan()
+end)
+
+dumpButton.MouseButton1Click:Connect(function()
+	dumpWorkspace()
+end)
+
+-- Double-click selected target
+-- เพื่อใช้ทดสอบ teleport ใน Studio
+local function teleportSelected()
+
+	if not selectedTarget then
+		status.Text = "No target selected"
+		return
+	end
+
+	local root = getRoot()
+	local pos = getPosition(selectedTarget)
+
+	if not root or not pos then
+		return
+	end
+
+	root.CFrame =
+		CFrame.new(
+			pos + Vector3.new(0,3,0)
+		)
+
+	status.Text =
+		"Moved to "
+		.. selectedTarget.Name
+
+	log(
+		"Moved to "
+		.. selectedTarget:GetFullName()
+	)
+end
+
+--========================================================
+-- RIGHT SHIFT = TELEPORT SELECTED
+--========================================================
+
+UserInputService.InputBegan:Connect(function(input,gpe)
+
+	if gpe then
+		return
+	end
+
+	if input.KeyCode == Enum.KeyCode.RightShift then
+		teleportSelected()
+	end
+end)
+
+--========================================================
+-- DRAG
+--========================================================
+
+local dragging = false
+local dragStart
+local startPos
+
+title.InputBegan:Connect(function(input)
+
+	if input.UserInputType ==
+		Enum.UserInputType.MouseButton1 then
+
+		dragging = true
+
+		dragStart =
+			input.Position
+
+		startPos =
+			main.Position
+
+		input.Changed:Connect(function()
+
+			if input.UserInputState ==
+				Enum.UserInputState.End then
+
+				dragging = false
+			end
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+
+	if not dragging then
+		return
+	end
+
+	if input.UserInputType ==
+		Enum.UserInputType.MouseMovement then
+
+		local delta =
+			input.Position - dragStart
+
+		main.Position =
+			UDim2.new(
+				startPos.X.Scale,
+				startPos.X.Offset + delta.X,
+
+				startPos.Y.Scale,
+				startPos.Y.Offset + delta.Y
+			)
+	end
+end)
+
+--========================================================
+-- START
+--========================================================
+
+log("Brainrot Debug Scanner ready.")
