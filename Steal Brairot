@@ -137,10 +137,27 @@ end
 function teleportHome()
     local char = LocalPlayer.Character; if not char then return end
     local root = char:FindFirstChild("HumanoidRootPart"); if not root then return end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
 
     local dest = homePosition or findSpawn()
-    root.CFrame = CFrame.new(dest)
-    print("[SAB] Teleported home!")
+    local targetCF = CFrame.new(dest)
+
+    -- teleport ซ้ำ 10 ครั้งเร็วๆ สู้กับ server correction
+    local count = 0
+    local conn
+    conn = RunService.Heartbeat:Connect(function()
+        count = count + 1
+        root.CFrame = targetCF
+        -- หยุด velocity ไม่ให้เด้ง
+        pcall(function()
+            root.AssemblyLinearVelocity = Vector3.zero
+            root.AssemblyAngularVelocity = Vector3.zero
+        end)
+        if count >= 10 then
+            conn:Disconnect()
+            print("[SAB] Teleported home!")
+        end
+    end)
 end
 
 -- ================================================
