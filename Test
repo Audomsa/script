@@ -1,0 +1,29 @@
+local Players = game:GetService("Players")
+
+local function addESP(player)
+    if player == Players.LocalPlayer then
+        return
+    end
+
+    local function setupCharacter(character)
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "PlayerESP"
+        highlight.FillColor = Color3.fromRGB(255, 80, 80)
+        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+        highlight.FillTransparency = 0.5
+        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+        highlight.Parent = character
+    end
+
+    if player.Character then
+        setupCharacter(player.Character)
+    end
+
+    player.CharacterAdded:Connect(setupCharacter)
+end
+
+for _, player in ipairs(Players:GetPlayers()) do
+    addESP(player)
+end
+
+Players.PlayerAdded:Connect(addESP)
