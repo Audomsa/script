@@ -1,340 +1,397 @@
 -- LocalScript
--- ใส่ใน StarterPlayer > StarterPlayerScripts
+-- StarterPlayer > StarterPlayerScripts
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
-local RunService = game:GetService("RunService")
 
 local LocalPlayer = Players.LocalPlayer
-local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
-
-local ESP_ENABLED = false
 
 --==================================================
 -- GUI
 --==================================================
 
-local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "SimpleESP"
-ScreenGui.ResetOnSpawn = false
-ScreenGui.Parent = PlayerGui
+local gui = Instance.new("ScreenGui")
+gui.Name = "DebugDumper"
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
 
-local Main = Instance.new("Frame")
-Main.Name = "Main"
-Main.Size = UDim2.fromOffset(240, 120)
-Main.Position = UDim2.new(0, 30, 0.5, -60)
-Main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Main.BorderSizePixel = 0
-Main.Parent = ScreenGui
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(300, 390)
+main.Position = UDim2.new(0, 30, 0.5, -195)
+main.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+main.BorderSizePixel = 0
+main.Parent = gui
 
-local MainCorner = Instance.new("UICorner")
-MainCorner.CornerRadius = UDim.new(0, 8)
-MainCorner.Parent = Main
-
--- Title / Drag area
-local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, 0, 0, 38)
-Title.BackgroundTransparency = 1
-Title.Text = "  Simple ESP"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 18
-Title.Font = Enum.Font.GothamBold
-Title.TextXAlignment = Enum.TextXAlignment.Left
-Title.Parent = Main
-
--- Toggle button
-local Toggle = Instance.new("TextButton")
-Toggle.Size = UDim2.new(1, -20, 0, 36)
-Toggle.Position = UDim2.new(0, 10, 0, 45)
-Toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-Toggle.Text = "ESP : OFF"
-Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
-Toggle.TextSize = 15
-Toggle.Font = Enum.Font.Gotham
-Toggle.BorderSizePixel = 0
-Toggle.Parent = Main
-
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 6)
-ToggleCorner.Parent = Toggle
-
-local Info = Instance.new("TextLabel")
-Info.Size = UDim2.new(1, -20, 0, 25)
-Info.Position = UDim2.new(0, 10, 0, 87)
-Info.BackgroundTransparency = 1
-Info.Text = "Drag the panel to move"
-Info.TextColor3 = Color3.fromRGB(150, 150, 150)
-Info.TextSize = 12
-Info.Font = Enum.Font.Gotham
-Info.Parent = Main
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = main
 
 --==================================================
--- DRAG SYSTEM
+-- TITLE
+--==================================================
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, 0, 0, 45)
+title.BackgroundTransparency = 1
+title.Text = "  Debug Dumper"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 20
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = main
+
+local subtitle = Instance.new("TextLabel")
+subtitle.Size = UDim2.new(1, -20, 0, 25)
+subtitle.Position = UDim2.fromOffset(10, 38)
+subtitle.BackgroundTransparency = 1
+subtitle.Text = "Roblox Studio Debug Tool"
+subtitle.TextColor3 = Color3.fromRGB(150, 150, 150)
+subtitle.TextSize = 12
+subtitle.Font = Enum.Font.Gotham
+subtitle.TextXAlignment = Enum.TextXAlignment.Left
+subtitle.Parent = main
+
+--==================================================
+-- DRAG
 --==================================================
 
 local dragging = false
 local dragStart
-local startPosition
+local startPos
 
-Title.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1
-        or input.UserInputType == Enum.UserInputType.Touch then
+title.InputBegan:Connect(function(input)
 
-        dragging = true
-        dragStart = input.Position
-        startPosition = Main.Position
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
 
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then
-                dragging = false
-            end
-        end)
-    end
+		dragging = true
+		dragStart = input.Position
+		startPos = main.Position
+
+		input.Changed:Connect(function()
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+		end)
+	end
 end)
 
 UserInputService.InputChanged:Connect(function(input)
-    if not dragging then
-        return
-    end
 
-    if input.UserInputType == Enum.UserInputType.MouseMovement
-        or input.UserInputType == Enum.UserInputType.Touch then
+	if not dragging then
+		return
+	end
 
-        local delta = input.Position - dragStart
+	if input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch then
 
-        Main.Position = UDim2.new(
-            startPosition.X.Scale,
-            startPosition.X.Offset + delta.X,
-            startPosition.Y.Scale,
-            startPosition.Y.Offset + delta.Y
-        )
-    end
+		local delta = input.Position - dragStart
+
+		main.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
 end)
 
 --==================================================
--- ESP
+-- BUTTON CREATOR
 --==================================================
 
-local function removeESP(character)
-    if not character then
-        return
-    end
+local function createButton(text, y, callback)
 
-    local highlight = character:FindFirstChild("SimpleESP_Highlight")
+	local button = Instance.new("TextButton")
 
-    if highlight then
-        highlight:Destroy()
-    end
+	button.Size = UDim2.new(1, -20, 0, 42)
+	button.Position = UDim2.fromOffset(10, y)
 
-    local head = character:FindFirstChild("Head")
+	button.BackgroundColor3 = Color3.fromRGB(48, 48, 55)
+	button.TextColor3 = Color3.fromRGB(235, 235, 235)
 
-    if head then
-        local espGui = head:FindFirstChild("SimpleESP_Info")
+	button.Text = text
+	button.TextSize = 14
+	button.Font = Enum.Font.GothamMedium
 
-        if espGui then
-            espGui:Destroy()
-        end
-    end
-end
+	button.BorderSizePixel = 0
+	button.AutoButtonColor = true
 
-local function createInfo(character, player)
-    local head = character:FindFirstChild("Head")
+	button.Parent = main
 
-    if not head then
-        return
-    end
+	local c = Instance.new("UICorner")
+	c.CornerRadius = UDim.new(0, 6)
+	c.Parent = button
 
-    if head:FindFirstChild("SimpleESP_Info") then
-        return
-    end
+	button.MouseButton1Click:Connect(function()
 
-    local billboard = Instance.new("BillboardGui")
-    billboard.Name = "SimpleESP_Info"
-    billboard.Adornee = head
-    billboard.Size = UDim2.fromOffset(180, 60)
-    billboard.StudsOffset = Vector3.new(0, 3, 0)
-    billboard.AlwaysOnTop = true
-    billboard.Parent = head
+		local success, err = pcall(callback)
 
-    local label = Instance.new("TextLabel")
-    label.Name = "Info"
-    label.Size = UDim2.fromScale(1, 1)
-    label.BackgroundTransparency = 1
-    label.TextColor3 = Color3.fromRGB(255, 255, 255)
-    label.TextStrokeTransparency = 0.25
-    label.TextSize = 14
-    label.Font = Enum.Font.GothamBold
-    label.TextWrapped = true
-    label.Parent = billboard
-end
+		if not success then
+			warn("[Debug Dumper Error]", err)
+		end
+	end)
 
-local function addESP(player)
-    if player == LocalPlayer then
-        return
-    end
-
-    local character = player.Character
-
-    if not character then
-        return
-    end
-
-    local humanoid = character:FindFirstChildOfClass("Humanoid")
-
-    if not humanoid then
-        return
-    end
-
-    -- Highlight
-    if not character:FindFirstChild("SimpleESP_Highlight") then
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "SimpleESP_Highlight"
-        highlight.FillColor = Color3.fromRGB(255, 70, 70)
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.FillTransparency = 0.5
-        highlight.OutlineTransparency = 0
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.Parent = character
-    end
-
-    -- Name / distance / HP
-    createInfo(character, player)
-end
-
-local function removeAllESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer and player.Character then
-            removeESP(player.Character)
-        end
-    end
-end
-
-local function updateESP()
-    if not ESP_ENABLED then
-        return
-    end
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-            addESP(player)
-        end
-    end
+	return button
 end
 
 --==================================================
--- UPDATE NAME / DISTANCE / HP
+-- DUMP INSTANCE TREE
 --==================================================
 
-local updateTimer = 0
+local function dumpTree(instance, depth, maxDepth)
 
-RunService.RenderStepped:Connect(function(deltaTime)
-    if not ESP_ENABLED then
-        return
-    end
+	depth = depth or 0
+	maxDepth = maxDepth or 4
 
-    updateTimer += deltaTime
+	if depth > maxDepth then
+		return
+	end
 
-    -- Update approximately 10 times/sec
-    if updateTimer < 0.1 then
-        return
-    end
+	local indent = string.rep("  ", depth)
 
-    updateTimer = 0
+	print(
+		indent
+		.. instance.Name
+		.. " ["
+		.. instance.ClassName
+		.. "]"
+	)
 
-    local myCharacter = LocalPlayer.Character
-    local myRoot = myCharacter
-        and myCharacter:FindFirstChild("HumanoidRootPart")
-
-    if not myRoot then
-        return
-    end
-
-    for _, player in ipairs(Players:GetPlayers()) do
-        if player ~= LocalPlayer then
-
-            local character = player.Character
-            local root = character
-                and character:FindFirstChild("HumanoidRootPart")
-
-            local humanoid = character
-                and character:FindFirstChildOfClass("Humanoid")
-
-            local head = character
-                and character:FindFirstChild("Head")
-
-            if root and humanoid and head then
-
-                local billboard = head:FindFirstChild("SimpleESP_Info")
-
-                if billboard then
-                    local label = billboard:FindFirstChild("Info")
-
-                    if label then
-                        local distance =
-                            math.floor((myRoot.Position - root.Position).Magnitude)
-
-                        local hp = math.floor(humanoid.Health)
-                        local maxHP = math.floor(humanoid.MaxHealth)
-
-                        label.Text =
-                            player.DisplayName
-                            .. "\n"
-                            .. distance .. " studs"
-                            .. "  |  HP: "
-                            .. hp .. "/" .. maxHP
-                    end
-                end
-            end
-        end
-    end
-end)
-
---==================================================
--- TOGGLE
---==================================================
-
-Toggle.MouseButton1Click:Connect(function()
-
-    ESP_ENABLED = not ESP_ENABLED
-
-    if ESP_ENABLED then
-        Toggle.Text = "ESP : ON"
-        Toggle.BackgroundColor3 = Color3.fromRGB(45, 170, 80)
-
-        updateESP()
-    else
-        Toggle.Text = "ESP : OFF"
-        Toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-
-        removeAllESP()
-    end
-end)
-
---==================================================
--- PLAYER EVENTS
---==================================================
-
-local function setupPlayer(player)
-
-    if player == LocalPlayer then
-        return
-    end
-
-    player.CharacterAdded:Connect(function(character)
-
-        character:WaitForChild("Humanoid", 5)
-        character:WaitForChild("Head", 5)
-
-        task.wait(0.3)
-
-        if ESP_ENABLED then
-            addESP(player)
-        end
-    end)
+	for _, child in ipairs(instance:GetChildren()) do
+		dumpTree(child, depth + 1, maxDepth)
+	end
 end
 
-for _, player in ipairs(Players:GetPlayers()) do
-    setupPlayer(player)
+--==================================================
+-- DUMP WORKSPACE
+--==================================================
+
+local function dumpWorkspace()
+
+	print("================================")
+	print("WORKSPACE DUMP")
+	print("================================")
+
+	dumpTree(workspace, 0, 5)
+
+	print("========== END WORKSPACE ==========")
 end
 
-Players.PlayerAdded:Connect(setupPlayer)
+--==================================================
+-- DUMP PLAYERS
+--==================================================
+
+local function dumpPlayers()
+
+	print("================================")
+	print("PLAYER DUMP")
+	print("================================")
+
+	for _, player in ipairs(Players:GetPlayers()) do
+
+		print("Player:", player.Name)
+		print("DisplayName:", player.DisplayName)
+		print("UserId:", player.UserId)
+		print("Team:", player.Team and player.Team.Name or "None")
+
+		local character = player.Character
+
+		if character then
+
+			print("Character:", character.Name)
+
+			local humanoid =
+				character:FindFirstChildOfClass("Humanoid")
+
+			if humanoid then
+				print("Health:", humanoid.Health)
+				print("MaxHealth:", humanoid.MaxHealth)
+			end
+
+			local root =
+				character:FindFirstChild("HumanoidRootPart")
+
+			if root then
+				print("Position:", root.Position)
+			end
+		else
+			print("Character: None")
+		end
+
+		print("-----------------------------")
+	end
+
+	print("========== END PLAYERS ==========")
+end
+
+--==================================================
+-- DUMP REMOTES
+--==================================================
+
+local function dumpRemotes()
+
+	print("================================")
+	print("REMOTE DUMP")
+	print("================================")
+
+	local count = 0
+
+	for _, instance in ipairs(game:GetDescendants()) do
+
+		if instance:IsA("RemoteEvent")
+			or instance:IsA("RemoteFunction") then
+
+			count += 1
+
+			print(
+				"#"
+				.. count
+				.. " | "
+				.. instance:GetFullName()
+				.. " ["
+				.. instance.ClassName
+				.. "]"
+			)
+		end
+	end
+
+	print("Total Remotes:", count)
+
+	print("========== END REMOTES ==========")
+end
+
+--==================================================
+-- DUMP ATTRIBUTES
+--==================================================
+
+local function dumpAttributes()
+
+	print("================================")
+	print("ATTRIBUTE DUMP")
+	print("================================")
+
+	local count = 0
+
+	for _, instance in ipairs(game:GetDescendants()) do
+
+		local attributes = instance:GetAttributes()
+
+		if next(attributes) then
+
+			count += 1
+
+			print("Instance:", instance:GetFullName())
+
+			for name, value in pairs(attributes) do
+
+				print(
+					"  ",
+					name,
+					"=",
+					value
+				)
+			end
+		end
+	end
+
+	print("Instances with attributes:", count)
+
+	print("========== END ATTRIBUTES ==========")
+end
+
+--==================================================
+-- DUMP VALUES
+--==================================================
+
+local function dumpValues()
+
+	print("================================")
+	print("VALUE OBJECT DUMP")
+	print("================================")
+
+	local valueClasses = {
+		"StringValue",
+		"IntValue",
+		"NumberValue",
+		"BoolValue",
+		"ObjectValue",
+		"Vector3Value",
+		"CFrameValue",
+		"Color3Value"
+	}
+
+	local lookup = {}
+
+	for _, className in ipairs(valueClasses) do
+		lookup[className] = true
+	end
+
+	local count = 0
+
+	for _, instance in ipairs(game:GetDescendants()) do
+
+		if lookup[instance.ClassName] then
+
+			count += 1
+
+			local value
+
+			pcall(function()
+				value = instance.Value
+			end)
+
+			print(
+				instance:GetFullName(),
+				"=",
+				value
+			)
+		end
+	end
+
+	print("Total ValueObjects:", count)
+
+	print("========== END VALUES ==========")
+end
+
+--==================================================
+-- FULL DUMP
+--==================================================
+
+local function fullDump()
+
+	print("")
+	print("########################################")
+	print("#           FULL DEBUG DUMP             #")
+	print("########################################")
+
+	dumpPlayers()
+	dumpRemotes()
+	dumpAttributes()
+	dumpValues()
+	dumpWorkspace()
+
+	print("########################################")
+	print("#          END FULL DEBUG DUMP          #")
+	print("########################################")
+end
+
+--==================================================
+-- BUTTONS
+--==================================================
+
+createButton("Dump Workspace", 75, dumpWorkspace)
+
+createButton("Dump Players", 125, dumpPlayers)
+
+createButton("Dump Remotes", 175, dumpRemotes)
+
+createButton("Dump Attributes", 225, dumpAttributes)
+
+createButton("Dump Values", 275, dumpValues)
+
+local fullButton =
+	createButton("FULL DUMP", 325, fullDump)
+
+fullButton.BackgroundColor3 =
+	Color3.fromRGB(70, 110, 180)
