@@ -1,29 +1,137 @@
 local Players = game:GetService("Players")
 
-local function addESP(player)
-    if player == Players.LocalPlayer then
+local LocalPlayer = Players.LocalPlayer
+
+-- =========================
+-- Settings
+-- =========================
+local ESP_ENABLED = false
+
+-- =========================
+-- Create GUI
+-- =========================
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "SimpleESP"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local Main = Instance.new("Frame")
+Main.Size = UDim2.fromOffset(220, 100)
+Main.Position = UDim2.new(0, 30, 0.5, -50)
+Main.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+Main.BorderSizePixel = 0
+Main.Parent = ScreenGui
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 8)
+Corner.Parent = Main
+
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, 35)
+Title.BackgroundTransparency = 1
+Title.Text = "Simple ESP"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.TextSize = 18
+Title.Font = Enum.Font.GothamBold
+Title.Parent = Main
+
+local Toggle = Instance.new("TextButton")
+Toggle.Size = UDim2.new(1, -20, 0, 40)
+Toggle.Position = UDim2.new(0, 10, 0, 45)
+Toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+Toggle.Text = "ESP : OFF"
+Toggle.TextColor3 = Color3.fromRGB(255, 255, 255)
+Toggle.TextSize = 16
+Toggle.Font = Enum.Font.Gotham
+Toggle.AutoButtonColor = true
+Toggle.Parent = Main
+
+local ToggleCorner = Instance.new("UICorner")
+ToggleCorner.CornerRadius = UDim.new(0, 6)
+ToggleCorner.Parent = Toggle
+
+-- =========================
+-- ESP Functions
+-- =========================
+local function removeESP(character)
+    if not character then
         return
     end
 
-    local function setupCharacter(character)
-        local highlight = Instance.new("Highlight")
-        highlight.Name = "PlayerESP"
-        highlight.FillColor = Color3.fromRGB(255, 80, 80)
-        highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
-        highlight.FillTransparency = 0.5
-        highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-        highlight.Parent = character
+    local esp = character:FindFirstChild("SimpleESP_Highlight")
+
+    if esp then
+        esp:Destroy()
+    end
+end
+
+local function addESP(character)
+    if not ESP_ENABLED or not character then
+        return
     end
 
-    if player.Character then
-        setupCharacter(player.Character)
+    if character:FindFirstChild("SimpleESP_Highlight") then
+        return
     end
 
-    player.CharacterAdded:Connect(setupCharacter)
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "SimpleESP_Highlight"
+    highlight.FillColor = Color3.fromRGB(255, 70, 70)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = character
+end
+
+local function updateESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            if ESP_ENABLED then
+                addESP(player.Character)
+            else
+                removeESP(player.Character)
+            end
+        end
+    end
+end
+
+-- =========================
+-- Toggle
+-- =========================
+Toggle.MouseButton1Click:Connect(function()
+    ESP_ENABLED = not ESP_ENABLED
+
+    if ESP_ENABLED then
+        Toggle.Text = "ESP : ON"
+        Toggle.BackgroundColor3 = Color3.fromRGB(45, 170, 80)
+    else
+        Toggle.Text = "ESP : OFF"
+        Toggle.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    end
+
+    updateESP()
+end)
+
+-- =========================
+-- New players / respawn
+-- =========================
+local function setupPlayer(player)
+    if player == LocalPlayer then
+        return
+    end
+
+    player.CharacterAdded:Connect(function(character)
+        task.wait(0.5)
+
+        if ESP_ENABLED then
+            addESP(character)
+        end
+    end)
 end
 
 for _, player in ipairs(Players:GetPlayers()) do
-    addESP(player)
+    setupPlayer(player)
 end
 
-Players.PlayerAdded:Connect(addESP)
+Players.PlayerAdded:Connect(setupPlayer)
