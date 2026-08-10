@@ -1,6 +1,4 @@
--- Steal a Brainrot Script v2
--- Auto Steal (Hold E) + Noclip
-
+-- Steal a Brainrot — ESP + Infinity Jump
 if _G.SAB_LOADED then print("[SAB] Already loaded!"); return end
 _G.SAB_LOADED = true
 
@@ -9,12 +7,11 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
 
 local Config = {
-    AutoSteal  = false,
-    Noclip     = false,
-    StealRange = 15,
-    Speed      = 16,
+    ESP         = true,
+    InfJump     = false,
 }
 
 -- GUI Parent
@@ -30,12 +27,14 @@ local old = guiParent:FindFirstChild("SAB_UI"); if old then old:Destroy() end
 -- GUI
 local SG = Instance.new("ScreenGui")
 SG.Name="SAB_UI"; SG.ResetOnSpawn=false; SG.Parent=guiParent
+
 local Frame = Instance.new("Frame",SG)
-Frame.Size=UDim2.new(0,230,0,280); Frame.Position=UDim2.new(0,20,0.5,-140)
+Frame.Size=UDim2.new(0,220,0,160); Frame.Position=UDim2.new(0,20,0.5,-80)
 Frame.BackgroundColor3=Color3.fromRGB(12,12,18); Frame.BorderSizePixel=0
 Frame.Active=true; Frame.Draggable=true
 Instance.new("UICorner",Frame).CornerRadius=UDim.new(0,8)
 local fst=Instance.new("UIStroke",Frame); fst.Color=Color3.fromRGB(100,60,140); fst.Thickness=1.2
+
 local TB=Instance.new("Frame",Frame); TB.Size=UDim2.new(1,0,0,34)
 TB.BackgroundColor3=Color3.fromRGB(24,16,40); TB.BorderSizePixel=0
 Instance.new("UICorner",TB).CornerRadius=UDim.new(0,8)
@@ -45,6 +44,7 @@ local TL=Instance.new("TextLabel",TB); TL.Size=UDim2.new(1,-10,1,0); TL.Position
 TL.BackgroundTransparency=1; TL.Text="🧠  Steal a Brainrot"
 TL.TextColor3=Color3.fromRGB(210,180,255); TL.TextSize=13
 TL.Font=Enum.Font.GothamBold; TL.TextXAlignment=Enum.TextXAlignment.Left
+
 local pad=Instance.new("UIPadding",Frame)
 pad.PaddingTop=UDim.new(0,42); pad.PaddingLeft=UDim.new(0,12)
 pad.PaddingRight=UDim.new(0,12); pad.PaddingBottom=UDim.new(0,12)
@@ -79,158 +79,151 @@ local function makeToggle(text,order,configKey)
     btn.MouseButton1Click:Connect(function() Config[configKey]=not Config[configKey]; refresh() end)
 end
 
-local function makeSlider(text,order,mn,mx,def,dec,configKey)
-    local row=Instance.new("Frame",Frame); row.Size=UDim2.new(1,0,0,46)
-    row.BackgroundTransparency=1; row.LayoutOrder=order
-    local top=Instance.new("Frame",row); top.Size=UDim2.new(1,0,0,14); top.BackgroundTransparency=1
-    local nl=Instance.new("TextLabel",top); nl.Size=UDim2.new(0.6,0,1,0); nl.BackgroundTransparency=1
-    nl.Text=text; nl.TextColor3=Color3.fromRGB(210,200,255); nl.TextSize=12
-    nl.Font=Enum.Font.GothamSemibold; nl.TextXAlignment=Enum.TextXAlignment.Left
-    local vl=Instance.new("TextLabel",top); vl.Size=UDim2.new(0.4,0,1,0); vl.Position=UDim2.new(0.6,0,0,0)
-    vl.BackgroundTransparency=1; vl.Text=tostring(def); vl.TextColor3=Color3.fromRGB(180,140,255)
-    vl.TextSize=11; vl.Font=Enum.Font.GothamBold; vl.TextXAlignment=Enum.TextXAlignment.Right
-    local track=Instance.new("Frame",row); track.Size=UDim2.new(1,0,0,6); track.Position=UDim2.new(0,0,0,26)
-    track.BackgroundColor3=Color3.fromRGB(35,30,55); track.BorderSizePixel=0
-    Instance.new("UICorner",track).CornerRadius=UDim.new(1,0)
-    local fill=Instance.new("Frame",track); fill.Size=UDim2.new((def-mn)/(mx-mn),0,1,0)
-    fill.BackgroundColor3=Color3.fromRGB(120,60,220); fill.BorderSizePixel=0
-    Instance.new("UICorner",fill).CornerRadius=UDim.new(1,0)
-    local thumb=Instance.new("Frame",track); thumb.Size=UDim2.new(0,12,0,12)
-    thumb.Position=UDim2.new((def-mn)/(mx-mn),-6,0.5,-6)
-    thumb.BackgroundColor3=Color3.fromRGB(200,170,255); thumb.BorderSizePixel=0; thumb.ZIndex=5
-    Instance.new("UICorner",thumb).CornerRadius=UDim.new(1,0)
-    local drag=false
-    local function upd(x)
-        local rel=math.clamp((x-track.AbsolutePosition.X)/track.AbsoluteSize.X,0,1)
-        local v=math.floor((mn+rel*(mx-mn))*10^dec+0.5)/10^dec
-        fill.Size=UDim2.new(rel,0,1,0); thumb.Position=UDim2.new(rel,-6,0.5,-6)
-        vl.Text=tostring(v); Config[configKey]=v
-    end
-    thumb.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true end end)
-    UserInputService.InputChanged:Connect(function(i) if drag and i.UserInputType==Enum.UserInputType.MouseMovement then upd(i.Position.X) end end)
-    UserInputService.InputEnded:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=false end end)
-    track.InputBegan:Connect(function(i) if i.UserInputType==Enum.UserInputType.MouseButton1 then drag=true upd(i.Position.X) end end)
+makeToggle("ESP  [E]",          1, "ESP")
+makeToggle("Infinity Jump  [J]", 2, "InfJump")
+
+-- ================================================
+--  ESP — แสดงชื่อ + ไฮไลท์ผ่านกำแพง
+-- ================================================
+local espData = {}
+
+local function removeESP(p)
+    local d = espData[p]; if not d then return end
+    pcall(function() d.hl:Destroy() end)
+    pcall(function() d.bb:Destroy() end)
+    espData[p] = nil
 end
 
-makeToggle("Auto Steal [G]", 1, "AutoSteal")
-makeToggle("Noclip [X]",     2, "Noclip")
-makeSlider("Steal Range",    3, 5, 50, Config.StealRange, 0, "StealRange")
-makeSlider("Speed",          4, 16, 100, Config.Speed,    0, "Speed")
+local function updateESP(p)
+    if not Config.ESP then removeESP(p); return end
+    local char = p.Character; if not char then removeESP(p); return end
+    local root = char:FindFirstChild("HumanoidRootPart"); if not root then return end
+    local hum  = char:FindFirstChildOfClass("Humanoid")
+    if hum and hum.Health <= 0 then removeESP(p); return end
 
--- ================================================
---  NOCLIP
--- ================================================
-local noclipConn = nil
-local function setNoclip(state)
-    Config.Noclip = state
-    if state then
-        if noclipConn then noclipConn:Disconnect() end
-        noclipConn = RunService.Stepped:Connect(function()
-            local char = LocalPlayer.Character; if not char then return end
-            for _, p in ipairs(char:GetDescendants()) do
-                if p:IsA("BasePart") then p.CanCollide = false end
-            end
-        end)
+    local d = espData[p]
+    if not d then
+        local hl = Instance.new("Highlight")
+        hl.FillTransparency = 0.5
+        hl.OutlineTransparency = 0
+        hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+
+        local bb = Instance.new("BillboardGui")
+        bb.Size = UDim2.new(0, 120, 0, 40)
+        bb.StudsOffset = Vector3.new(0, 3.2, 0)
+        bb.AlwaysOnTop = true
+
+        local nameLbl = Instance.new("TextLabel", bb)
+        nameLbl.Size = UDim2.new(1,0,0.6,0)
+        nameLbl.BackgroundTransparency = 1
+        nameLbl.Text = p.Name
+        nameLbl.TextColor3 = Color3.fromRGB(255,255,255)
+        nameLbl.TextSize = 13; nameLbl.Font = Enum.Font.GothamBold
+        nameLbl.TextStrokeTransparency = 0.3
+        nameLbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+
+        local distLbl = Instance.new("TextLabel", bb)
+        distLbl.Size = UDim2.new(1,0,0.4,0)
+        distLbl.Position = UDim2.new(0,0,0.6,0)
+        distLbl.BackgroundTransparency = 1
+        distLbl.TextSize = 10; distLbl.Font = Enum.Font.Gotham
+        distLbl.TextColor3 = Color3.fromRGB(200,180,255)
+        distLbl.TextStrokeTransparency = 0.3
+        distLbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+
+        d = {hl=hl, bb=bb, distLbl=distLbl}
+        espData[p] = d
+    end
+
+    if d.hl.Parent ~= char then d.hl.Adornee = char; d.hl.Parent = char end
+    if d.bb.Parent ~= root then d.bb.Adornee = root; d.bb.Parent = root end
+
+    -- สี highlight ตาม team (ถ้ามี)
+    local myTeam = LocalPlayer.Team
+    if p.Team and myTeam and p.Team == myTeam then
+        d.hl.FillColor = Color3.fromRGB(50,150,255)   -- น้ำเงิน = teammate
+        d.hl.OutlineColor = Color3.fromRGB(100,200,255)
     else
-        if noclipConn then noclipConn:Disconnect(); noclipConn = nil end
-        local char = LocalPlayer.Character; if not char then return end
-        for _, p in ipairs(char:GetDescendants()) do
-            if p:IsA("BasePart") then p.CanCollide = true end
-        end
+        d.hl.FillColor = Color3.fromRGB(220,50,50)    -- แดง = ศัตรู
+        d.hl.OutlineColor = Color3.fromRGB(255,255,255)
+    end
+
+    -- ระยะห่าง
+    local myChar = LocalPlayer.Character
+    local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
+    if myRoot then
+        local dist = math.floor((root.Position - myRoot.Position).Magnitude)
+        d.distLbl.Text = "📍 " .. dist .. " studs"
     end
 end
 
 -- ================================================
---  SPEED — force ทุก frame บายพาส speed limit ตอนถือ Brainrot
+--  INFINITY JUMP
 -- ================================================
-RunService.RenderStepped:Connect(function()
+local infJumpConn = nil
+local function setupInfJump()
+    if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
+    if not Config.InfJump then return end
+
     local char = LocalPlayer.Character; if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-    -- RenderStepped เร็วกว่า Heartbeat ทำให้เกม reset speed ไม่ทัน
-    if hum.WalkSpeed ~= Config.Speed then
-        hum.WalkSpeed = Config.Speed
-    end
-end)
 
--- ================================================
---  AUTO STEAL — Hold E จนครบ HoldDuration
--- ================================================
-local function findNearestPrompt()
-    local myChar = LocalPlayer.Character; if not myChar then return nil end
-    local myRoot = myChar:FindFirstChild("HumanoidRootPart"); if not myRoot then return nil end
-    local best, bestDist = nil, math.huge
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        if obj:IsA("ProximityPrompt") and obj.Enabled then
-            local part = obj.Parent
-            if part and part:IsA("BasePart") then
-                local dist = (part.Position - myRoot.Position).Magnitude
-                if dist <= Config.StealRange and dist < bestDist then
-                    best = obj; bestDist = dist
-                end
-            end
+    infJumpConn = hum.StateChanged:Connect(function(_, new)
+        if Config.InfJump and new == Enum.HumanoidStateType.Freefall then
+            task.wait(0.1)
+            hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
         end
-    end
-    return best
+    end)
 end
 
-local holding = false
-RunService.Heartbeat:Connect(function()
-    if not Config.AutoSteal then
-        holding = false
-        return
-    end
-
-    local prompt = findNearestPrompt()
-    if not prompt then holding = false; return end
-
-    if not holding then
-        holding = true
-        -- เริ่ม hold prompt
-        pcall(function()
-            -- วิธีที่ 1: fireproximityprompt ตรงๆ (executor function)
-            fireproximityprompt(prompt)
-        end)
-
-        -- วิธีที่ 2: trigger ผ่าน holdDuration loop
-        pcall(function()
-            local holdTime = prompt.HoldDuration
-            if holdTime <= 0 then
-                -- กดครั้งเดียวพอ
-                prompt.Triggered:Fire(LocalPlayer)
-            else
-                -- ต้องค้างไว้ตาม holdTime
-                local elapsed = 0
-                local conn
-                conn = RunService.Heartbeat:Connect(function(dt)
-                    if not Config.AutoSteal then conn:Disconnect(); holding=false; return end
-                    elapsed = elapsed + dt
-                    -- ส่ง InputBegan ซ้ำๆ เพื่อจำลองการค้าง
-                    pcall(function() prompt:InputHoldBegin() end)
-                    if elapsed >= holdTime + 0.1 then
-                        pcall(function() prompt:InputHoldEnd() end)
-                        conn:Disconnect()
-                        task.wait(0.3)
-                        holding = false
-                    end
-                end)
-            end
-        end)
+UserInputService.JumpRequest:Connect(function()
+    if not Config.InfJump then return end
+    local char = LocalPlayer.Character; if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    if hum:GetState() == Enum.HumanoidStateType.Freefall then
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
+
+-- setup ใหม่ทุกครั้งที่ respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(0.5)
+    setupInfJump()
+end)
+setupInfJump()
+
+-- ================================================
+--  MAIN LOOP
+-- ================================================
+RunService.RenderStepped:Connect(function()
+    -- อัป ESP ทุก player
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p == LocalPlayer then continue end
+        updateESP(p)
+    end
+
+    -- sync InfJump กับ character ใหม่
+    if Config.InfJump and not infJumpConn then
+        setupInfJump()
+    end
+end)
+
+Players.PlayerRemoving:Connect(removeESP)
 
 -- ================================================
 --  KEYBINDS
 -- ================================================
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp then return end
-    if inp.KeyCode == Enum.KeyCode.G then
-        Config.AutoSteal = not Config.AutoSteal
-        print("[SAB] AutoSteal = " .. tostring(Config.AutoSteal))
+    if inp.KeyCode == Enum.KeyCode.E then
+        Config.ESP = not Config.ESP
+        print("[SAB] ESP = " .. tostring(Config.ESP))
     end
-    if inp.KeyCode == Enum.KeyCode.X then
-        setNoclip(not Config.Noclip)
-        print("[SAB] Noclip = " .. tostring(Config.Noclip))
+    if inp.KeyCode == Enum.KeyCode.J then
+        Config.InfJump = not Config.InfJump
+        if Config.InfJump then setupInfJump() end
+        print("[SAB] InfJump = " .. tostring(Config.InfJump))
     end
 end)
 
-print("[SAB] Loaded! G = Auto Steal | X = Noclip")
+print("[SAB] Loaded! E = ESP | J = Infinity Jump")
