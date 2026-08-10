@@ -1,4 +1,4 @@
--- Steal a Brainrot — ESP + Infinity Jump
+-- Steal a Brainrot — ESP + Teleport Home
 if _G.SAB_LOADED then print("[SAB] Already loaded!"); return end
 _G.SAB_LOADED = true
 
@@ -7,11 +7,9 @@ local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
-local Camera = workspace.CurrentCamera
 
 local Config = {
-    ESP         = true,
-    InfJump     = false,
+    ESP  = true,
 }
 
 -- GUI Parent
@@ -29,7 +27,7 @@ local SG = Instance.new("ScreenGui")
 SG.Name="SAB_UI"; SG.ResetOnSpawn=false; SG.Parent=guiParent
 
 local Frame = Instance.new("Frame",SG)
-Frame.Size=UDim2.new(0,220,0,160); Frame.Position=UDim2.new(0,20,0.5,-80)
+Frame.Size=UDim2.new(0,220,0,180); Frame.Position=UDim2.new(0,20,0.5,-90)
 Frame.BackgroundColor3=Color3.fromRGB(12,12,18); Frame.BorderSizePixel=0
 Frame.Active=true; Frame.Draggable=true
 Instance.new("UICorner",Frame).CornerRadius=UDim.new(0,8)
@@ -51,6 +49,7 @@ pad.PaddingRight=UDim.new(0,12); pad.PaddingBottom=UDim.new(0,12)
 local layout=Instance.new("UIListLayout",Frame)
 layout.SortOrder=Enum.SortOrder.LayoutOrder; layout.Padding=UDim.new(0,10)
 
+-- Toggle
 local function makeToggle(text,order,configKey)
     local row=Instance.new("Frame",Frame); row.Size=UDim2.new(1,0,0,28)
     row.BackgroundTransparency=1; row.LayoutOrder=order
@@ -79,11 +78,73 @@ local function makeToggle(text,order,configKey)
     btn.MouseButton1Click:Connect(function() Config[configKey]=not Config[configKey]; refresh() end)
 end
 
-makeToggle("ESP  [E]",          1, "ESP")
-makeToggle("Infinity Jump  [J]", 2, "InfJump")
+-- Teleport Home Button
+local function makeTeleportBtn(order)
+    local row=Instance.new("Frame",Frame); row.Size=UDim2.new(1,0,0,34)
+    row.BackgroundTransparency=1; row.LayoutOrder=order
+
+    local btn=Instance.new("TextButton",row)
+    btn.Size=UDim2.new(1,0,1,0)
+    btn.BackgroundColor3=Color3.fromRGB(80,40,160)
+    btn.Text="🏠  Teleport Home  [H]"
+    btn.TextColor3=Color3.fromRGB(255,255,255)
+    btn.TextSize=12; btn.Font=Enum.Font.GothamBold
+    btn.AutoButtonColor=false; btn.BorderSizePixel=0
+    Instance.new("UICorner",btn).CornerRadius=UDim.new(0,6)
+
+    btn.MouseButton1Click:Connect(function()
+        btn.BackgroundColor3=Color3.fromRGB(50,20,100)
+        teleportHome()
+        task.wait(0.2)
+        btn.BackgroundColor3=Color3.fromRGB(80,40,160)
+    end)
+end
+
+makeToggle("ESP  [E]", 1, "ESP")
+makeTeleportBtn(2)
 
 -- ================================================
---  ESP — แสดงชื่อ + ไฮไลท์ผ่านกำแพง
+--  TELEPORT HOME
+-- ================================================
+local homePosition = nil  -- บันทึก spawn position
+
+local function findSpawn()
+    -- หา SpawnLocation ใน workspace
+    for _, v in ipairs(workspace:GetDescendants()) do
+        if v:IsA("SpawnLocation") then
+            return v.Position + Vector3.new(0, 5, 0)
+        end
+    end
+    -- ถ้าไม่มีให้ใช้ Vector3.zero
+    return Vector3.new(0, 10, 0)
+end
+
+-- บันทึก position ตอน spawn
+local function onCharacterAdded(char)
+    task.wait(1)
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if root then
+        homePosition = root.Position
+        print("[SAB] Home saved: " .. tostring(homePosition))
+    end
+end
+
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+if LocalPlayer.Character then
+    onCharacterAdded(LocalPlayer.Character)
+end
+
+function teleportHome()
+    local char = LocalPlayer.Character; if not char then return end
+    local root = char:FindFirstChild("HumanoidRootPart"); if not root then return end
+
+    local dest = homePosition or findSpawn()
+    root.CFrame = CFrame.new(dest)
+    print("[SAB] Teleported home!")
+end
+
+-- ================================================
+--  ESP
 -- ================================================
 local espData = {}
 
@@ -98,57 +159,46 @@ local function updateESP(p)
     if not Config.ESP then removeESP(p); return end
     local char = p.Character; if not char then removeESP(p); return end
     local root = char:FindFirstChild("HumanoidRootPart"); if not root then return end
-    local hum  = char:FindFirstChildOfClass("Humanoid")
+    local hum = char:FindFirstChildOfClass("Humanoid")
     if hum and hum.Health <= 0 then removeESP(p); return end
 
     local d = espData[p]
     if not d then
         local hl = Instance.new("Highlight")
-        hl.FillTransparency = 0.5
-        hl.OutlineTransparency = 0
+        hl.FillTransparency = 0.5; hl.OutlineTransparency = 0
         hl.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
 
         local bb = Instance.new("BillboardGui")
-        bb.Size = UDim2.new(0, 120, 0, 40)
-        bb.StudsOffset = Vector3.new(0, 3.2, 0)
+        bb.Size = UDim2.new(0,120,0,40); bb.StudsOffset = Vector3.new(0,3.2,0)
         bb.AlwaysOnTop = true
 
-        local nameLbl = Instance.new("TextLabel", bb)
-        nameLbl.Size = UDim2.new(1,0,0.6,0)
-        nameLbl.BackgroundTransparency = 1
-        nameLbl.Text = p.Name
-        nameLbl.TextColor3 = Color3.fromRGB(255,255,255)
+        local nameLbl = Instance.new("TextLabel",bb)
+        nameLbl.Size = UDim2.new(1,0,0.6,0); nameLbl.BackgroundTransparency = 1
+        nameLbl.Text = p.Name; nameLbl.TextColor3 = Color3.fromRGB(255,255,255)
         nameLbl.TextSize = 13; nameLbl.Font = Enum.Font.GothamBold
-        nameLbl.TextStrokeTransparency = 0.3
-        nameLbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+        nameLbl.TextStrokeTransparency = 0.3; nameLbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
 
-        local distLbl = Instance.new("TextLabel", bb)
-        distLbl.Size = UDim2.new(1,0,0.4,0)
-        distLbl.Position = UDim2.new(0,0,0.6,0)
-        distLbl.BackgroundTransparency = 1
-        distLbl.TextSize = 10; distLbl.Font = Enum.Font.Gotham
+        local distLbl = Instance.new("TextLabel",bb)
+        distLbl.Size = UDim2.new(1,0,0.4,0); distLbl.Position = UDim2.new(0,0,0.6,0)
+        distLbl.BackgroundTransparency = 1; distLbl.TextSize = 10; distLbl.Font = Enum.Font.Gotham
         distLbl.TextColor3 = Color3.fromRGB(200,180,255)
-        distLbl.TextStrokeTransparency = 0.3
-        distLbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
+        distLbl.TextStrokeTransparency = 0.3; distLbl.TextStrokeColor3 = Color3.fromRGB(0,0,0)
 
-        d = {hl=hl, bb=bb, distLbl=distLbl}
-        espData[p] = d
+        d = {hl=hl, bb=bb, distLbl=distLbl}; espData[p] = d
     end
 
     if d.hl.Parent ~= char then d.hl.Adornee = char; d.hl.Parent = char end
     if d.bb.Parent ~= root then d.bb.Adornee = root; d.bb.Parent = root end
 
-    -- สี highlight ตาม team (ถ้ามี)
     local myTeam = LocalPlayer.Team
     if p.Team and myTeam and p.Team == myTeam then
-        d.hl.FillColor = Color3.fromRGB(50,150,255)   -- น้ำเงิน = teammate
+        d.hl.FillColor = Color3.fromRGB(50,150,255)
         d.hl.OutlineColor = Color3.fromRGB(100,200,255)
     else
-        d.hl.FillColor = Color3.fromRGB(220,50,50)    -- แดง = ศัตรู
+        d.hl.FillColor = Color3.fromRGB(220,50,50)
         d.hl.OutlineColor = Color3.fromRGB(255,255,255)
     end
 
-    -- ระยะห่าง
     local myChar = LocalPlayer.Character
     local myRoot = myChar and myChar:FindFirstChild("HumanoidRootPart")
     if myRoot then
@@ -157,105 +207,26 @@ local function updateESP(p)
     end
 end
 
--- ================================================
---  INFINITY JUMP
--- ================================================
-local infJumpConn = nil
-local function setupInfJump()
-    if infJumpConn then infJumpConn:Disconnect(); infJumpConn = nil end
-    if not Config.InfJump then return end
-
-    local char = LocalPlayer.Character; if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-
-    infJumpConn = hum.StateChanged:Connect(function(_, new)
-        if Config.InfJump and new == Enum.HumanoidStateType.Freefall then
-            task.wait(0.1)
-            hum:SetStateEnabled(Enum.HumanoidStateType.Jumping, true)
-        end
-    end)
-end
-
-UserInputService.JumpRequest:Connect(function()
-    if not Config.InfJump then return end
-    local char = LocalPlayer.Character; if not char then return end
-    local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-    local root = char:FindFirstChild("HumanoidRootPart"); if not root then return end
-    if hum:GetState() == Enum.HumanoidStateType.Freefall then
-        -- reset velocity ก่อนกระโดดใหม่ ป้องกันตกเร็ว
-        root.AssemblyLinearVelocity = Vector3.new(
-            root.AssemblyLinearVelocity.X,
-            0,  -- reset Y velocity ทำให้ไม่ตกเร็ว
-            root.AssemblyLinearVelocity.Z
-        )
-        hum:ChangeState(Enum.HumanoidStateType.Jumping)
-    end
-end)
-
--- Anti Fall Damage
-local function setupAntiFall(char)
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if not hum then return end
-    hum.StateChanged:Connect(function(_, new)
-        if new == Enum.HumanoidStateType.Landed then
-            hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-            hum.Health = hum.Health -- ไม่ลด HP
-        end
-    end)
-    -- บล็อค fall damage โดยตรง
-    hum.FreeFalling:Connect(function(active)
-        if not active then
-            task.wait(0.05)
-            pcall(function()
-                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-            end)
-        end
-    end)
-end
-
--- setup ใหม่ทุกครั้งที่ respawn
-LocalPlayer.CharacterAdded:Connect(function(char)
-    task.wait(0.5)
-    setupInfJump()
-    setupAntiFall(char)
-end)
-if LocalPlayer.Character then
-    setupAntiFall(LocalPlayer.Character)
-end
-setupInfJump()
-
--- ================================================
---  MAIN LOOP
--- ================================================
+-- Main Loop
 RunService.RenderStepped:Connect(function()
-    -- อัป ESP ทุก player
     for _, p in ipairs(Players:GetPlayers()) do
         if p == LocalPlayer then continue end
         updateESP(p)
-    end
-
-    -- sync InfJump กับ character ใหม่
-    if Config.InfJump and not infJumpConn then
-        setupInfJump()
     end
 end)
 
 Players.PlayerRemoving:Connect(removeESP)
 
--- ================================================
---  KEYBINDS
--- ================================================
+-- Keybinds
 UserInputService.InputBegan:Connect(function(inp, gp)
     if gp then return end
     if inp.KeyCode == Enum.KeyCode.E then
         Config.ESP = not Config.ESP
         print("[SAB] ESP = " .. tostring(Config.ESP))
     end
-    if inp.KeyCode == Enum.KeyCode.J then
-        Config.InfJump = not Config.InfJump
-        if Config.InfJump then setupInfJump() end
-        print("[SAB] InfJump = " .. tostring(Config.InfJump))
+    if inp.KeyCode == Enum.KeyCode.H then
+        teleportHome()
     end
 end)
 
-print("[SAB] Loaded! E = ESP | J = Infinity Jump")
+print("[SAB] Loaded! E = ESP | H = Teleport Home")
