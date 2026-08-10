@@ -1,0 +1,571 @@
+-- LocalScript
+-- ใส่ใน StarterPlayer > StarterPlayerScripts
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+
+local LocalPlayer = Players.LocalPlayer
+
+--==================================================
+-- DATA
+--==================================================
+
+local dumpLines = {}
+
+local function addLine(text)
+	table.insert(dumpLines, tostring(text))
+end
+
+local function clearData()
+	table.clear(dumpLines)
+end
+
+--==================================================
+-- GUI
+--==================================================
+
+local gui = Instance.new("ScreenGui")
+gui.Name = "DebugDumperUI"
+gui.ResetOnSpawn = false
+gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+
+local main = Instance.new("Frame")
+main.Size = UDim2.fromOffset(600, 500)
+main.Position = UDim2.new(0.5, -300, 0.5, -250)
+main.BackgroundColor3 = Color3.fromRGB(25, 25, 29)
+main.BorderSizePixel = 0
+main.Parent = gui
+
+local corner = Instance.new("UICorner")
+corner.CornerRadius = UDim.new(0, 10)
+corner.Parent = main
+
+--==================================================
+-- TITLE / DRAG
+--==================================================
+
+local title = Instance.new("TextLabel")
+title.Size = UDim2.new(1, -50, 0, 40)
+title.Position = UDim2.fromOffset(12, 5)
+title.BackgroundTransparency = 1
+title.Text = "Debug Dumper"
+title.TextColor3 = Color3.fromRGB(255, 255, 255)
+title.TextSize = 20
+title.Font = Enum.Font.GothamBold
+title.TextXAlignment = Enum.TextXAlignment.Left
+title.Parent = main
+
+local close = Instance.new("TextButton")
+close.Size = UDim2.fromOffset(35, 30)
+close.Position = UDim2.new(1, -42, 0, 10)
+close.BackgroundColor3 = Color3.fromRGB(180, 55, 55)
+close.Text = "X"
+close.TextColor3 = Color3.fromRGB(255,255,255)
+close.TextSize = 14
+close.Font = Enum.Font.GothamBold
+close.BorderSizePixel = 0
+close.Parent = main
+
+Instance.new("UICorner", close).CornerRadius = UDim.new(0, 6)
+
+close.MouseButton1Click:Connect(function()
+	gui.Enabled = false
+end)
+
+--==================================================
+-- DRAG SYSTEM
+--==================================================
+
+local dragging = false
+local dragStart
+local startPos
+
+title.InputBegan:Connect(function(input)
+
+	if input.UserInputType == Enum.UserInputType.MouseButton1
+		or input.UserInputType == Enum.UserInputType.Touch then
+
+		dragging = true
+		dragStart = input.Position
+		startPos = main.Position
+
+		input.Changed:Connect(function()
+
+			if input.UserInputState == Enum.UserInputState.End then
+				dragging = false
+			end
+
+		end)
+	end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+
+	if not dragging then
+		return
+	end
+
+	if input.UserInputType == Enum.UserInputType.MouseMovement
+		or input.UserInputType == Enum.UserInputType.Touch then
+
+		local delta = input.Position - dragStart
+
+		main.Position = UDim2.new(
+			startPos.X.Scale,
+			startPos.X.Offset + delta.X,
+			startPos.Y.Scale,
+			startPos.Y.Offset + delta.Y
+		)
+	end
+end)
+
+--==================================================
+-- BUTTON BAR
+--==================================================
+
+local buttonFrame = Instance.new("Frame")
+buttonFrame.Size = UDim2.new(1, -20, 0, 40)
+buttonFrame.Position = UDim2.fromOffset(10, 48)
+buttonFrame.BackgroundTransparency = 1
+buttonFrame.Parent = main
+
+local layout = Instance.new("UIListLayout")
+layout.FillDirection = Enum.FillDirection.Horizontal
+layout.Padding = UDim.new(0, 5)
+layout.Parent = buttonFrame
+
+local function makeButton(text)
+
+	local button = Instance.new("TextButton")
+
+	button.Size = UDim2.fromOffset(90, 34)
+	button.BackgroundColor3 = Color3.fromRGB(50, 50, 58)
+	button.TextColor3 = Color3.fromRGB(235,235,235)
+	button.Text = text
+	button.TextSize = 12
+	button.Font = Enum.Font.GothamMedium
+	button.BorderSizePixel = 0
+	button.Parent = buttonFrame
+
+	Instance.new("UICorner", button).CornerRadius =
+		UDim.new(0, 5)
+
+	return button
+end
+
+local workspaceButton = makeButton("Workspace")
+local playersButton = makeButton("Players")
+local remotesButton = makeButton("Remotes")
+local attributesButton = makeButton("Attributes")
+local valuesButton = makeButton("Values")
+
+--==================================================
+-- SEARCH
+--==================================================
+
+local search = Instance.new("TextBox")
+search.Size = UDim2.new(1, -20, 0, 35)
+search.Position = UDim2.fromOffset(10, 92)
+search.BackgroundColor3 = Color3.fromRGB(35,35,40)
+search.TextColor3 = Color3.fromRGB(255,255,255)
+search.PlaceholderColor3 = Color3.fromRGB(130,130,130)
+search.PlaceholderText = "Search dump..."
+search.Text = ""
+search.TextSize = 13
+search.Font = Enum.Font.Gotham
+search.ClearTextOnFocus = false
+search.BorderSizePixel = 0
+search.Parent = main
+
+Instance.new("UICorner", search).CornerRadius =
+	UDim.new(0, 6)
+
+--==================================================
+-- OUTPUT
+--==================================================
+
+local output = Instance.new("ScrollingFrame")
+output.Size = UDim2.new(1, -20, 1, -185)
+output.Position = UDim2.fromOffset(10, 137)
+output.BackgroundColor3 = Color3.fromRGB(15,15,18)
+output.BorderSizePixel = 0
+output.ScrollBarThickness = 6
+output.CanvasSize = UDim2.new(0,0,0,0)
+output.Parent = main
+
+Instance.new("UICorner", output).CornerRadius =
+	UDim.new(0, 6)
+
+local text = Instance.new("TextLabel")
+text.Size = UDim2.new(1, -20, 0, 0)
+text.Position = UDim2.fromOffset(10, 8)
+text.BackgroundTransparency = 1
+text.TextColor3 = Color3.fromRGB(210,210,210)
+text.TextSize = 13
+text.Font = Enum.Font.Code
+text.TextXAlignment = Enum.TextXAlignment.Left
+text.TextYAlignment = Enum.TextYAlignment.Top
+text.TextWrapped = false
+text.AutomaticSize = Enum.AutomaticSize.Y
+text.Parent = output
+
+--==================================================
+-- BOTTOM BUTTONS
+--==================================================
+
+local clearButton = Instance.new("TextButton")
+clearButton.Size = UDim2.fromOffset(90, 32)
+clearButton.Position = UDim2.new(1, -200, 1, -40)
+clearButton.BackgroundColor3 = Color3.fromRGB(70,70,78)
+clearButton.Text = "Clear"
+clearButton.TextColor3 = Color3.fromRGB(255,255,255)
+clearButton.TextSize = 13
+clearButton.Font = Enum.Font.Gotham
+clearButton.BorderSizePixel = 0
+clearButton.Parent = main
+
+Instance.new("UICorner", clearButton).CornerRadius =
+	UDim.new(0, 5)
+
+local copyButton = Instance.new("TextButton")
+copyButton.Size = UDim2.fromOffset(90, 32)
+copyButton.Position = UDim2.new(1, -100, 1, -40)
+copyButton.BackgroundColor3 = Color3.fromRGB(60,110,180)
+copyButton.Text = "Copy"
+copyButton.TextColor3 = Color3.fromRGB(255,255,255)
+copyButton.TextSize = 13
+copyButton.Font = Enum.Font.Gotham
+copyButton.BorderSizePixel = 0
+copyButton.Parent = main
+
+Instance.new("UICorner", copyButton).CornerRadius =
+	UDim.new(0, 5)
+
+--==================================================
+-- RENDER
+--==================================================
+
+local function render()
+
+	local filter = string.lower(search.Text)
+
+	local result = {}
+
+	for _, line in ipairs(dumpLines) do
+
+		if filter == ""
+			or string.find(
+				string.lower(line),
+				filter,
+				1,
+				true
+			) then
+
+			table.insert(result, line)
+		end
+	end
+
+	text.Text = table.concat(result, "\n")
+
+	task.defer(function()
+
+		output.CanvasSize = UDim2.fromOffset(
+			0,
+			text.AbsoluteSize.Y + 20
+		)
+
+	end)
+end
+
+--==================================================
+-- DUMP FUNCTIONS
+--==================================================
+
+local function dumpTree(instance, depth, maxDepth)
+
+	depth = depth or 0
+	maxDepth = maxDepth or 5
+
+	if depth > maxDepth then
+		return
+	end
+
+	local indent = string.rep("  ", depth)
+
+	addLine(
+		indent
+		.. "├─ "
+		.. instance.Name
+		.. " ["
+		.. instance.ClassName
+		.. "]"
+	)
+
+	for _, child in ipairs(instance:GetChildren()) do
+		dumpTree(child, depth + 1, maxDepth)
+	end
+end
+
+local function dumpWorkspace()
+
+	clearData()
+
+	addLine("========== WORKSPACE ==========")
+	dumpTree(workspace, 0, 6)
+	addLine("")
+	addLine("========== END ==========")
+
+	render()
+end
+
+local function dumpPlayers()
+
+	clearData()
+
+	addLine("========== PLAYERS ==========")
+
+	for _, player in ipairs(Players:GetPlayers()) do
+
+		addLine("")
+		addLine("Player: " .. player.Name)
+		addLine("DisplayName: " .. player.DisplayName)
+		addLine("UserId: " .. player.UserId)
+
+		if player.Team then
+			addLine("Team: " .. player.Team.Name)
+		else
+			addLine("Team: None")
+		end
+
+		local character = player.Character
+
+		if character then
+
+			addLine("Character: " .. character.Name)
+
+			local humanoid =
+				character:FindFirstChildOfClass("Humanoid")
+
+			if humanoid then
+
+				addLine(
+					"Health: "
+					.. math.floor(humanoid.Health)
+					.. "/"
+					.. math.floor(humanoid.MaxHealth)
+				)
+
+			end
+
+			local root =
+				character:FindFirstChild("HumanoidRootPart")
+
+			if root then
+				addLine(
+					"Position: "
+					.. tostring(root.Position)
+				)
+			end
+
+		else
+			addLine("Character: None")
+		end
+	end
+
+	addLine("")
+	addLine("========== END ==========")
+
+	render()
+end
+
+local function dumpRemotes()
+
+	clearData()
+
+	addLine("========== REMOTES ==========")
+
+	local count = 0
+
+	for _, instance in ipairs(game:GetDescendants()) do
+
+		if instance:IsA("RemoteEvent")
+			or instance:IsA("RemoteFunction") then
+
+			count += 1
+
+			addLine(
+				"#"
+				.. count
+				.. " "
+				.. instance:GetFullName()
+				.. " ["
+				.. instance.ClassName
+				.. "]"
+			)
+		end
+	end
+
+	addLine("")
+	addLine("Total: " .. count)
+	addLine("========== END ==========")
+
+	render()
+end
+
+local function dumpAttributes()
+
+	clearData()
+
+	addLine("========== ATTRIBUTES ==========")
+
+	local count = 0
+
+	for _, instance in ipairs(game:GetDescendants()) do
+
+		local attributes = instance:GetAttributes()
+
+		if next(attributes) then
+
+			count += 1
+
+			addLine("")
+			addLine(instance:GetFullName())
+
+			for name, value in pairs(attributes) do
+
+				addLine(
+					"  "
+					.. name
+					.. " = "
+					.. tostring(value)
+				)
+			end
+		end
+	end
+
+	addLine("")
+	addLine("Instances: " .. count)
+	addLine("========== END ==========")
+
+	render()
+end
+
+local function dumpValues()
+
+	clearData()
+
+	addLine("========== VALUES ==========")
+
+	local classes = {
+		StringValue = true,
+		IntValue = true,
+		NumberValue = true,
+		BoolValue = true,
+		ObjectValue = true,
+		Vector3Value = true,
+		CFrameValue = true,
+		Color3Value = true
+	}
+
+	local count = 0
+
+	for _, instance in ipairs(game:GetDescendants()) do
+
+		if classes[instance.ClassName] then
+
+			count += 1
+
+			local value = "?"
+
+			pcall(function()
+				value = tostring(instance.Value)
+			end)
+
+			addLine(
+				instance:GetFullName()
+				.. " = "
+				.. value
+			)
+		end
+	end
+
+	addLine("")
+	addLine("Total: " .. count)
+	addLine("========== END ==========")
+
+	render()
+end
+
+--==================================================
+-- EVENTS
+--==================================================
+
+workspaceButton.MouseButton1Click:Connect(dumpWorkspace)
+playersButton.MouseButton1Click:Connect(dumpPlayers)
+remotesButton.MouseButton1Click:Connect(dumpRemotes)
+attributesButton.MouseButton1Click:Connect(dumpAttributes)
+valuesButton.MouseButton1Click:Connect(dumpValues)
+
+search:GetPropertyChangedSignal("Text"):Connect(render)
+
+clearButton.MouseButton1Click:Connect(function()
+
+	clearData()
+	render()
+
+end)
+
+copyButton.MouseButton1Click:Connect(function()
+
+	-- Clipboard access may be unavailable in normal Roblox clients.
+	-- This attempts to copy when supported.
+
+	if setclipboard then
+
+		local filter = string.lower(search.Text)
+		local result = {}
+
+		for _, line in ipairs(dumpLines) do
+
+			if filter == ""
+				or string.find(
+					string.lower(line),
+					filter,
+					1,
+					true
+				) then
+
+				table.insert(result, line)
+			end
+		end
+
+		setclipboard(table.concat(result, "\n"))
+
+		copyButton.Text = "Copied!"
+
+		task.delay(1.5, function()
+			copyButton.Text = "Copy"
+		end)
+
+	else
+
+		copyButton.Text = "Unavailable"
+
+		task.delay(1.5, function()
+			copyButton.Text = "Copy"
+		end)
+
+	end
+end)
+
+--==================================================
+-- START MESSAGE
+--==================================================
+
+addLine("Debug Dumper ready.")
+addLine("Select a dump category above.")
+addLine("")
+addLine("Data shown is limited to what this")
+addLine("client can access in the current game.")
+
+render()
