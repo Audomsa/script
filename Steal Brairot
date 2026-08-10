@@ -180,16 +180,48 @@ UserInputService.JumpRequest:Connect(function()
     if not Config.InfJump then return end
     local char = LocalPlayer.Character; if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
+    local root = char:FindFirstChild("HumanoidRootPart"); if not root then return end
     if hum:GetState() == Enum.HumanoidStateType.Freefall then
+        -- reset velocity ก่อนกระโดดใหม่ ป้องกันตกเร็ว
+        root.AssemblyLinearVelocity = Vector3.new(
+            root.AssemblyLinearVelocity.X,
+            0,  -- reset Y velocity ทำให้ไม่ตกเร็ว
+            root.AssemblyLinearVelocity.Z
+        )
         hum:ChangeState(Enum.HumanoidStateType.Jumping)
     end
 end)
 
+-- Anti Fall Damage
+local function setupAntiFall(char)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+    hum.StateChanged:Connect(function(_, new)
+        if new == Enum.HumanoidStateType.Landed then
+            hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            hum.Health = hum.Health -- ไม่ลด HP
+        end
+    end)
+    -- บล็อค fall damage โดยตรง
+    hum.FreeFalling:Connect(function(active)
+        if not active then
+            task.wait(0.05)
+            pcall(function()
+                hum:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+            end)
+        end
+    end)
+end
+
 -- setup ใหม่ทุกครั้งที่ respawn
-LocalPlayer.CharacterAdded:Connect(function()
+LocalPlayer.CharacterAdded:Connect(function(char)
     task.wait(0.5)
     setupInfJump()
+    setupAntiFall(char)
 end)
+if LocalPlayer.Character then
+    setupAntiFall(LocalPlayer.Character)
+end
 setupInfJump()
 
 -- ================================================
