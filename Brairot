@@ -1,30 +1,47 @@
---============================================================
--- AUTO STEAL TESTER
--- สำหรับเกมที่คุณสร้างเองใน Roblox Studio
---
--- ใส่เป็น LocalScript ใน:
--- StarterPlayer > StarterPlayerScripts
---
--- Base ต้องติด Tag: "BrainrotBase"
--- Object ที่ต้องการทดสอบต้องติด Tag: "Stealable"
--- Base ของผู้เล่นควรมี Attribute:
--- OwnerUserId = Player.UserId
---============================================================
+--[[
+    Brainrot Scanner / Auto Test
+    สำหรับเกมของคุณเองใน Roblox Studio
+
+    วางเป็น LocalScript ที่:
+    StarterPlayer > StarterPlayerScripts
+
+    โครงสร้างที่รองรับ:
+
+    Workspace
+    └── Bases
+        ├── Base1
+        │   ├── Spawn
+        │   └── Brainrots
+        │       ├── Brainrot1
+        │       └── Brainrot2
+        └── Base2
+            └── ...
+
+    Base Attributes:
+        OwnerUserId = number
+        Locked = true/false
+
+    Brainrot Attributes:
+        Stealable = true/false
+        Value = number
+        DisplayName = string
+]]
 
 local Players = game:GetService("Players")
-local CollectionService = game:GetService("CollectionService")
 local UserInputService = game:GetService("UserInputService")
 
 local Player = Players.LocalPlayer
 local PlayerGui = Player:WaitForChild("PlayerGui")
 
 local RUNNING = false
+local BASES = {}
 local TARGETS = {}
+local SELECTED = nil
 local HOME_POSITION = nil
 
---============================================================
+--========================================================
 -- HELPERS
---============================================================
+--========================================================
 
 local function getCharacter()
 	return Player.Character
@@ -40,57 +57,48 @@ local function getRoot()
 	return character:FindFirstChild("HumanoidRootPart")
 end
 
-local function getBasePosition(base)
-	if not base then
-		return nil
-	end
-
-	local spawn = base:FindFirstChild("Spawn", true)
-
-	if spawn and spawn:IsA("BasePart") then
-		return spawn.Position
-	end
-
-	if base:IsA("Model") then
-		return base:GetPivot().Position
-	end
-
-	if base:IsA("BasePart") then
-		return base.Position
-	end
-
-	return nil
+local function getBasesFolder()
+	return workspace:FindFirstChild("Bases")
 end
 
-local function getObjectPosition(object)
-	if not object then
+local function getPosition(instance)
+	if not instance then
 		return nil
 	end
 
-	if object:IsA("Model") then
-		return object:GetPivot().Position
+	if instance:IsA("BasePart") then
+		return instance.Position
 	end
 
-	if object:IsA("BasePart") then
-		return object.Position
+	if instance:IsA("Model") then
+		return instance:GetPivot().Position
 	end
 
-	local part = object:FindFirstChildWhichIsA(
+	local part = instance:FindFirstChildWhichIsA(
 		"BasePart",
 		true
 	)
 
-	if part then
-		return part.Position
-	end
+	return part and part.Position
+end
 
-	return nil
+local function getBasePosition(base)
+	local spawn = base:FindFirstChild(
+		"Spawn",
+		true
+	)
+
+	return getPosition(spawn) or getPosition(base)
 end
 
 local function getMyBase()
-	for _, base in ipairs(
-		CollectionService:GetTagged("BrainrotBase")
-	) do
+	local folder = getBasesFolder()
+
+	if not folder then
+		return nil
+	end
+
+	for _, base in ipairs(folder:GetChildren()) do
 
 		if base:GetAttribute("OwnerUserId")
 			== Player.UserId then
@@ -102,27 +110,43 @@ local function getMyBase()
 	return nil
 end
 
---============================================================
+local function getBrainrotFolder(base)
+	return base:FindFirstChild(
+		"Brainrots",
+		true
+	)
+end
+
+local function getBrainrots(base)
+	local folder = getBrainrotFolder(base)
+
+	if not folder then
+		return {}
+	end
+
+	return folder:GetChildren()
+end
+
+--========================================================
 -- GUI
---============================================================
+--========================================================
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "AutoStealTester"
+gui.Name = "BrainrotScanner"
 gui.ResetOnSpawn = false
 gui.Parent = PlayerGui
 
 local main = Instance.new("Frame")
-main.Name = "Main"
-main.Size = UDim2.fromOffset(480, 430)
+main.Size = UDim2.fromOffset(560, 500)
 main.Position = UDim2.new(
 	0.5,
-	-240,
+	-280,
 	0.5,
-	-215
+	-250
 )
 
 main.BackgroundColor3 =
-	Color3.fromRGB(25, 25, 29)
+	Color3.fromRGB(24, 24, 28)
 
 main.BorderSizePixel = 0
 main.Parent = gui
@@ -130,57 +154,63 @@ main.Parent = gui
 Instance.new("UICorner", main).CornerRadius =
 	UDim.new(0, 10)
 
---============================================================
+--========================================================
 -- TITLE
---============================================================
+--========================================================
 
 local title = Instance.new("TextLabel")
 title.Size = UDim2.new(1, -60, 0, 42)
 title.Position = UDim2.fromOffset(12, 5)
 title.BackgroundTransparency = 1
-title.Text = "Auto Steal Tester"
+title.Text = "Brainrot Scanner"
 title.TextColor3 =
-	Color3.fromRGB(255, 255, 255)
+	Color3.fromRGB(255,255,255)
+
 title.TextSize = 19
 title.Font = Enum.Font.GothamBold
 title.TextXAlignment =
 	Enum.TextXAlignment.Left
+
 title.Parent = main
 
 local close = Instance.new("TextButton")
 close.Size = UDim2.fromOffset(32, 28)
-close.Position = UDim2.new(1, -42, 0, 9)
+close.Position =
+	UDim2.new(1, -42, 0, 9)
+
 close.BackgroundColor3 =
-	Color3.fromRGB(170, 55, 55)
+	Color3.fromRGB(170,55,55)
+
 close.Text = "X"
 close.TextColor3 =
-	Color3.fromRGB(255, 255, 255)
+	Color3.fromRGB(255,255,255)
+
 close.TextSize = 13
 close.Font = Enum.Font.GothamBold
 close.BorderSizePixel = 0
 close.Parent = main
 
 Instance.new("UICorner", close).CornerRadius =
-	UDim.new(0, 5)
+	UDim.new(0,5)
 
 close.MouseButton1Click:Connect(function()
 	gui.Enabled = false
 end)
 
---============================================================
+--========================================================
 -- STATUS
---============================================================
+--========================================================
 
 local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1, -20, 0, 32)
-status.Position = UDim2.fromOffset(10, 50)
+status.Size = UDim2.new(1,-20,0,32)
+status.Position = UDim2.fromOffset(10,50)
 
 status.BackgroundColor3 =
-	Color3.fromRGB(38, 38, 44)
+	Color3.fromRGB(38,38,44)
 
 status.Text = "Ready"
 status.TextColor3 =
-	Color3.fromRGB(180, 180, 180)
+	Color3.fromRGB(180,180,180)
 
 status.TextSize = 13
 status.Font = Enum.Font.Gotham
@@ -189,262 +219,459 @@ status.TextXAlignment =
 
 status.Parent = main
 
-Instance.new("UICorner", status).CornerRadius =
-	UDim.new(0, 6)
+Instance.new("UICorner",status).CornerRadius =
+	UDim.new(0,6)
 
---============================================================
+--========================================================
 -- BUTTON BAR
---============================================================
+--========================================================
 
-local buttons = Instance.new("Frame")
-buttons.Size = UDim2.new(1, -20, 0, 40)
-buttons.Position = UDim2.fromOffset(10, 88)
-buttons.BackgroundTransparency = 1
-buttons.Parent = main
+local bar = Instance.new("Frame")
+bar.Size = UDim2.new(1,-20,0,38)
+bar.Position = UDim2.fromOffset(10,88)
+bar.BackgroundTransparency = 1
+bar.Parent = main
 
 local layout = Instance.new("UIListLayout")
 layout.FillDirection =
 	Enum.FillDirection.Horizontal
 
-layout.Padding = UDim.new(0, 6)
-layout.Parent = buttons
+layout.Padding =
+	UDim.new(0,6)
 
-local function createButton(text, width)
+layout.Parent = bar
 
-	local button = Instance.new("TextButton")
+local function button(text,width)
 
-	button.Size =
-		UDim2.fromOffset(width, 36)
+	local b = Instance.new("TextButton")
 
-	button.BackgroundColor3 =
-		Color3.fromRGB(50, 50, 58)
+	b.Size = UDim2.fromOffset(
+		width,
+		34
+	)
 
-	button.Text = text
-	button.TextColor3 =
-		Color3.fromRGB(255, 255, 255)
+	b.BackgroundColor3 =
+		Color3.fromRGB(50,50,58)
 
-	button.TextSize = 12
-	button.Font = Enum.Font.GothamBold
-	button.BorderSizePixel = 0
-	button.Parent = buttons
+	b.Text = text
 
-	Instance.new("UICorner", button).CornerRadius =
-		UDim.new(0, 6)
+	b.TextColor3 =
+		Color3.fromRGB(255,255,255)
 
-	return button
+	b.TextSize = 12
+	b.Font = Enum.Font.GothamBold
+	b.BorderSizePixel = 0
+	b.Parent = bar
+
+	Instance.new("UICorner",b).CornerRadius =
+		UDim.new(0,6)
+
+	return b
 end
 
 local scanButton =
-	createButton("Scan", 95)
+	button("Scan",90)
 
 local autoButton =
-	createButton("Auto Test", 105)
+	button("Auto Test",100)
+
+local returnButton =
+	button("Return",90)
 
 local stopButton =
-	createButton("Stop", 80)
+	button("Stop",70)
 
-local homeButton =
-	createButton("Home", 80)
+--========================================================
+-- TARGET LIST
+--========================================================
 
---============================================================
--- OUTPUT
---============================================================
+local list = Instance.new("ScrollingFrame")
+list.Size = UDim2.new(1,-20,0,210)
+list.Position = UDim2.fromOffset(10,135)
 
-local output = Instance.new("ScrollingFrame")
-output.Size = UDim2.new(1, -20, 1, -145)
-output.Position = UDim2.fromOffset(10, 135)
+list.BackgroundColor3 =
+	Color3.fromRGB(14,14,17)
 
-output.BackgroundColor3 =
-	Color3.fromRGB(14, 14, 17)
+list.BorderSizePixel = 0
+list.ScrollBarThickness = 6
+list.CanvasSize =
+	UDim2.new(0,0,0,0)
 
-output.BorderSizePixel = 0
-output.ScrollBarThickness = 6
-output.CanvasSize =
-	UDim2.fromOffset(0, 0)
+list.Parent = main
 
-output.Parent = main
+Instance.new("UICorner",list).CornerRadius =
+	UDim.new(0,6)
 
-Instance.new("UICorner", output).CornerRadius =
-	UDim.new(0, 6)
+local listLayout =
+	Instance.new("UIListLayout")
 
-local text = Instance.new("TextLabel")
-text.Size = UDim2.new(1, -16, 0, 0)
-text.Position = UDim2.fromOffset(8, 8)
+listLayout.Padding =
+	UDim.new(0,4)
 
-text.BackgroundTransparency = 1
-text.Text = ""
-text.TextColor3 =
-	Color3.fromRGB(210, 210, 210)
+listLayout.Parent = list
 
-text.TextSize = 12
-text.Font = Enum.Font.Code
+local listPadding =
+	Instance.new("UIPadding")
 
-text.TextXAlignment =
+listPadding.PaddingTop =
+	UDim.new(0,6)
+
+listPadding.PaddingLeft =
+	UDim.new(0,6)
+
+listPadding.PaddingRight =
+	UDim.new(0,6)
+
+listPadding.Parent = list
+
+--========================================================
+-- LOG
+--========================================================
+
+local logBox = Instance.new("ScrollingFrame")
+logBox.Size =
+	UDim2.new(1,-20,0,105)
+
+logBox.Position =
+	UDim2.fromOffset(10,355)
+
+logBox.BackgroundColor3 =
+	Color3.fromRGB(12,12,15)
+
+logBox.BorderSizePixel = 0
+logBox.ScrollBarThickness = 5
+logBox.CanvasSize =
+	UDim2.new(0,0,0,0)
+
+logBox.Parent = main
+
+Instance.new("UICorner",logBox).CornerRadius =
+	UDim.new(0,6)
+
+local logText = Instance.new("TextLabel")
+logText.Size =
+	UDim2.new(1,-12,0,0)
+
+logText.Position =
+	UDim2.fromOffset(6,5)
+
+logText.BackgroundTransparency = 1
+logText.Text = ""
+
+logText.TextColor3 =
+	Color3.fromRGB(190,190,190)
+
+logText.TextSize = 11
+logText.Font = Enum.Font.Code
+
+logText.TextXAlignment =
 	Enum.TextXAlignment.Left
 
-text.TextYAlignment =
+logText.TextYAlignment =
 	Enum.TextYAlignment.Top
 
-text.TextWrapped = false
-text.AutomaticSize =
+logText.AutomaticSize =
 	Enum.AutomaticSize.Y
 
-text.Parent = output
+logText.Parent = logBox
 
---============================================================
--- OUTPUT FUNCTIONS
---============================================================
+--========================================================
+-- LOG
+--========================================================
 
-local lines = {}
+local logs = {}
 
 local function log(message)
 
 	table.insert(
-		lines,
+		logs,
 		tostring(message)
 	)
 
-	-- จำกัด log เพื่อไม่ให้ UI ใหญ่เกินไป
-	if #lines > 300 then
-		table.remove(lines, 1)
+	if #logs > 150 then
+		table.remove(logs,1)
 	end
 
-	text.Text =
-		table.concat(lines, "\n")
+	logText.Text =
+		table.concat(logs,"\n")
 
 	task.defer(function()
 
-		output.CanvasSize =
+		logBox.CanvasSize =
 			UDim2.fromOffset(
 				0,
-				text.AbsoluteSize.Y + 20
+				logText.AbsoluteSize.Y + 10
 			)
 
-		output.CanvasPosition =
+		logBox.CanvasPosition =
 			Vector2.new(
 				0,
 				math.max(
 					0,
-					text.AbsoluteSize.Y
-						- output.AbsoluteSize.Y
+					logText.AbsoluteSize.Y
+					- logBox.AbsoluteSize.Y
 				)
 			)
 	end)
 end
 
-local function clearLog()
-	table.clear(lines)
-	text.Text = ""
+--========================================================
+-- CLEAR TARGET UI
+--========================================================
+
+local function clearTargetUI()
+
+	for _, child in ipairs(
+		list:GetChildren()
+	) do
+
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+
+	list.CanvasSize =
+		UDim2.fromOffset(0,0)
 end
 
---============================================================
--- SCAN / DUMP
---============================================================
+--========================================================
+-- TARGET BUTTON
+--========================================================
+
+local function createTargetButton(
+	base,
+	brainrot
+)
+
+	local owner =
+		base:GetAttribute(
+			"OwnerUserId"
+		)
+
+	local value =
+		brainrot:GetAttribute(
+			"Value"
+		)
+
+	local name =
+		brainrot:GetAttribute(
+			"DisplayName"
+		)
+
+		or brainrot.Name
+
+	local b = Instance.new(
+		"TextButton"
+	)
+
+	b.Size =
+		UDim2.new(
+			1,
+			-4,
+			0,
+			38
+		)
+
+	b.BackgroundColor3 =
+		Color3.fromRGB(
+			40,
+			40,
+			46
+		)
+
+	b.TextColor3 =
+		Color3.fromRGB(
+			220,
+			220,
+			220
+		)
+
+	b.TextSize = 12
+	b.Font = Enum.Font.Gotham
+	b.BorderSizePixel = 0
+
+	b.Text =
+		"🧠 "
+		.. tostring(name)
+		.. "   |   "
+		.. tostring(value or "?")
+		.. "   | Base: "
+		.. base.Name
+
+	b.Parent = list
+
+	Instance.new("UICorner",b).CornerRadius =
+		UDim.new(0,5)
+
+	b.MouseButton1Click:Connect(function()
+
+		SELECTED = {
+			Base = base,
+			Object = brainrot
+		}
+
+		status.Text =
+			"Selected: "
+			.. tostring(name)
+
+		status.TextColor3 =
+			Color3.fromRGB(
+				100,
+				180,
+				255
+			)
+
+		log(
+			"[SELECT] "
+			.. base.Name
+			.. " / "
+			.. tostring(name)
+		)
+	end)
+end
+
+--========================================================
+-- REFRESH LIST
+--========================================================
+
+local function refreshList()
+
+	clearTargetUI()
+
+	for _, target in ipairs(TARGETS) do
+
+		if target.Object
+			and target.Object.Parent then
+
+			createTargetButton(
+				target.Base,
+				target.Object
+			)
+		end
+	end
+
+	task.defer(function()
+
+		list.CanvasSize =
+			UDim2.fromOffset(
+				0,
+				listLayout.AbsoluteContentSize.Y
+				+ 12
+			)
+	end)
+end
+
+--========================================================
+-- SCAN
+--========================================================
 
 local function scan()
 
+	BASES = {}
 	TARGETS = {}
+	SELECTED = nil
 
-	clearLog()
+	clearTargetUI()
 
 	log("========== SCAN ==========")
 
-	local bases =
-		CollectionService:GetTagged(
-			"BrainrotBase"
-		)
+	local folder =
+		getBasesFolder()
 
-	log("Bases found: " .. #bases)
+	if not folder then
 
-	local myBase = getMyBase()
-
-	if myBase then
-
-		HOME_POSITION =
-			getBasePosition(myBase)
+		status.Text =
+			"Workspace.Bases not found"
 
 		log(
-			"Home: "
-			.. myBase:GetFullName()
+			"[ERROR] Workspace.Bases missing"
 		)
 
-	else
-
-		log("Home: NOT FOUND")
+		return
 	end
 
-	for _, base in ipairs(bases) do
+	for _, base in ipairs(
+		folder:GetChildren()
+	) do
+
+		table.insert(
+			BASES,
+			base
+		)
 
 		local owner =
 			base:GetAttribute(
 				"OwnerUserId"
 			)
 
-		log("")
-		log(
-			"BASE: "
-			.. base:GetFullName()
-		)
-
-		log(
-			"OwnerUserId: "
-			.. tostring(owner)
-		)
-
-		local count = 0
-
-		for _, object in ipairs(
-			CollectionService:GetTagged(
-				"Stealable"
+		local locked =
+			base:GetAttribute(
+				"Locked"
 			)
-		) do
 
-			if object:IsDescendantOf(base) then
+		log(
+			"[BASE] "
+			.. base.Name
+			.. " | Owner="
+			.. tostring(owner)
+			.. " | Locked="
+			.. tostring(locked)
+		)
 
-				local available =
-					object:GetAttribute(
+		-- ไม่เลือกบ้านตัวเอง
+		if base ~= getMyBase() then
+
+			for _, brainrot in ipairs(
+				getBrainrots(base)
+			) do
+
+				local stealable =
+					brainrot:GetAttribute(
 						"Stealable"
 					)
 
-				if available ~= false then
-
-					count += 1
+				if stealable ~= false then
 
 					table.insert(
 						TARGETS,
 						{
 							Base = base,
-							Object = object
+							Object = brainrot
 						}
 					)
 
 					log(
-						"  ├─ "
-						.. object.Name
-						.. " [Stealable]"
+						"   └─ "
+						.. brainrot.Name
 					)
 				end
 			end
 		end
+	end
+
+	local myBase =
+		getMyBase()
+
+	if myBase then
+
+		HOME_POSITION =
+			getBasePosition(
+				myBase
+			)
 
 		log(
-			"Targets: "
-			.. count
+			"[HOME] "
+			.. myBase.Name
 		)
 	end
 
-	log("")
-	log(
-		"Total targets: "
-		.. #TARGETS
-	)
-
-	log("========== END ==========")
+	refreshList()
 
 	status.Text =
-		"Found "
+		"Bases: "
+		.. #BASES
+		.. " | Targets: "
 		.. #TARGETS
-		.. " target(s)"
 
 	status.TextColor3 =
 		Color3.fromRGB(
@@ -452,24 +679,32 @@ local function scan()
 			220,
 			130
 		)
+
+	log(
+		"Targets found: "
+		.. #TARGETS
+	)
+
+	log("========== END ==========")
 end
 
---============================================================
+--========================================================
 -- RETURN HOME
---============================================================
+--========================================================
 
 local function returnHome()
 
-	local root = getRoot()
+	local root =
+		getRoot()
 
 	if not root then
-		status.Text = "Character not ready"
 		return
 	end
 
 	if not HOME_POSITION then
 
-		local base = getMyBase()
+		local base =
+			getMyBase()
 
 		if base then
 			HOME_POSITION =
@@ -480,7 +715,7 @@ local function returnHome()
 	if not HOME_POSITION then
 
 		status.Text =
-			"Home position not found"
+			"Home not found"
 
 		return
 	end
@@ -488,25 +723,89 @@ local function returnHome()
 	root.CFrame =
 		CFrame.new(
 			HOME_POSITION
-				+ Vector3.new(0, 3, 0)
+			+ Vector3.new(0,3,0)
 		)
 
 	status.Text =
 		"Returned Home"
 
-	status.TextColor3 =
-		Color3.fromRGB(
-			100,
-			220,
-			130
-		)
-
-	log("[HOME] Returned home")
+	log("[RETURN] Home")
 end
 
---============================================================
+--========================================================
+-- TEST COLLECT
+--========================================================
+
+local function testCollect(target)
+
+	if not target then
+		return
+	end
+
+	local object =
+		target.Object
+
+	if not object
+		or not object.Parent then
+
+		log(
+			"[ERROR] Target no longer exists"
+		)
+
+		return
+	end
+
+	local root =
+		getRoot()
+
+	if not root then
+		return
+	end
+
+	local position =
+		getPosition(object)
+
+	if not position then
+		return
+	end
+
+	log(
+		"[MOVE] "
+		.. object.Name
+	)
+
+	root.CFrame =
+		CFrame.new(
+			position
+			+ Vector3.new(0,3,0)
+		)
+
+	task.wait(0.5)
+
+	-- จำลองการเก็บ
+	object:SetAttribute(
+		"Stealable",
+		false
+	)
+
+	object:SetAttribute(
+		"CollectedBy",
+		Player.UserId
+	)
+
+	log(
+		"[COLLECT] "
+		.. object.Name
+	)
+
+	task.wait(0.4)
+
+	returnHome()
+end
+
+--========================================================
 -- AUTO TEST
---============================================================
+--========================================================
 
 local function autoTest()
 
@@ -517,7 +816,7 @@ local function autoTest()
 	RUNNING = true
 
 	status.Text =
-		"Auto Test running..."
+		"Auto Test..."
 
 	status.TextColor3 =
 		Color3.fromRGB(
@@ -526,133 +825,49 @@ local function autoTest()
 			80
 		)
 
-	-- Scan ก่อนทุกครั้ง
+	-- Scan ใหม่ก่อน
 	scan()
 
 	if #TARGETS == 0 then
 
 		status.Text =
-			"No target found"
+			"No targets"
 
 		RUNNING = false
+
 		return
 	end
 
-	local root = getRoot()
-
-	if not root then
-
-		status.Text =
-			"Character not ready"
-
-		RUNNING = false
-		return
-	end
-
-	-- จำบ้านอีกครั้ง
-	local base = getMyBase()
-
-	if base then
-		HOME_POSITION =
-			getBasePosition(base)
-	end
-
-	for index, data in ipairs(TARGETS) do
+	for i = 1,#TARGETS do
 
 		if not RUNNING then
 			break
 		end
 
-		local object = data.Object
+		local target =
+			TARGETS[i]
 
-		if not object
-			or not object.Parent then
+		if target.Object
+			and target.Object.Parent then
 
-			continue
+			SELECTED = target
+
+			status.Text =
+				"Testing "
+				.. target.Object.Name
+
+			testCollect(target)
+
+			task.wait(0.5)
 		end
-
-		local available =
-			object:GetAttribute(
-				"Stealable"
-			)
-
-		if available == false then
-			continue
-		end
-
-		local position =
-			getObjectPosition(object)
-
-		if not position then
-			continue
-		end
-
-		log("")
-		log(
-			"["
-			.. index
-			.. "/"
-			.. #TARGETS
-			.. "] Target: "
-			.. object.Name
-		)
-
-		-- ไปยังเป้าหมาย
-		root.CFrame =
-			CFrame.new(
-				position
-					+ Vector3.new(0, 3, 0)
-			)
-
-		status.Text =
-			"Testing: "
-			.. object.Name
-
-		task.wait(0.5)
-
-		if not RUNNING then
-			break
-		end
-
-		-- จำลองการเก็บ
-		object:SetAttribute(
-			"Stealable",
-			false
-		)
-
-		object:SetAttribute(
-			"CollectedBy",
-			Player.UserId
-		)
-
-		log(
-			"[COLLECTED] "
-			.. object.Name
-		)
-
-		task.wait(0.4)
-
-		-- กลับบ้านหลังเก็บ
-		if HOME_POSITION then
-
-			root.CFrame =
-				CFrame.new(
-					HOME_POSITION
-						+ Vector3.new(0, 3, 0)
-				)
-
-			log(
-				"[RETURN] Home"
-			)
-		end
-
-		task.wait(0.5)
 	end
 
 	RUNNING = false
 
+	refreshList()
+
 	status.Text =
-		"Auto Test finished"
+		"Auto Test Finished"
 
 	status.TextColor3 =
 		Color3.fromRGB(
@@ -661,16 +876,16 @@ local function autoTest()
 			130
 		)
 
-	log("")
 	log("========== FINISHED ==========")
 end
 
---============================================================
+--========================================================
 -- BUTTON EVENTS
---============================================================
+--========================================================
 
 scanButton.MouseButton1Click:Connect(
 	function()
+
 		if not RUNNING then
 			scan()
 		end
@@ -679,8 +894,33 @@ scanButton.MouseButton1Click:Connect(
 
 autoButton.MouseButton1Click:Connect(
 	function()
-		task.spawn(autoTest)
+
+		if SELECTED and not RUNNING then
+
+			RUNNING = true
+
+			task.spawn(
+				function()
+
+					testCollect(
+						SELECTED
+					)
+
+					RUNNING = false
+
+					refreshList()
+				end
+			)
+
+		elseif not RUNNING then
+
+			task.spawn(autoTest)
+		end
 	end
+)
+
+returnButton.MouseButton1Click:Connect(
+	returnHome
 )
 
 stopButton.MouseButton1Click:Connect(
@@ -698,17 +938,13 @@ stopButton.MouseButton1Click:Connect(
 				100
 			)
 
-		log("[STOP] Auto Test stopped")
+		log("[STOP]")
 	end
 )
 
-homeButton.MouseButton1Click:Connect(
-	returnHome
-)
-
---============================================================
--- DRAG WINDOW
---============================================================
+--========================================================
+-- DRAG
+--========================================================
 
 local dragging = false
 local dragStart
@@ -774,14 +1010,11 @@ UserInputService.InputChanged:Connect(
 	end
 )
 
---============================================================
+--========================================================
 -- START
---============================================================
+--========================================================
 
-log("Auto Steal Tester ready.")
-log("Press Scan to inspect bases.")
-log("Press Auto Test to run the test.")
-log("")
-log('Required tags:')
-log('  BrainrotBase')
-log('  Stealable')
+log("Brainrot Scanner ready.")
+log("Press Scan to scan Bases.")
+log("Click a target to select it.")
+log("Auto Test will simulate collect + return.")
