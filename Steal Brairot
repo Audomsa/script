@@ -1,6 +1,13 @@
 -- Steal a Brainrot Script
 -- Auto Steal (E interact) + Noclip
 
+-- ป้องกัน script รันซ้ำเมื่อ respawn
+if _G.SAB_LOADED then
+    print("[SAB] Already loaded! ไม่รันซ้ำ")
+    return
+end
+_G.SAB_LOADED = true
+
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -154,8 +161,17 @@ local function setNoclip(state)
 end
 
 -- ================================================
---  SPEED
+--  SPEED + รองรับ respawn
 -- ================================================
+local function onCharacterAdded(char)
+    -- reset noclip collision เมื่อ respawn
+    if Config.Noclip and noclipConn then
+        noclipConn:Disconnect(); noclipConn = nil
+        setNoclip(true) -- เปิดใหม่กับ character ใหม่
+    end
+end
+LocalPlayer.CharacterAdded:Connect(onCharacterAdded)
+
 RunService.Heartbeat:Connect(function()
     local char = LocalPlayer.Character
     if not char then return end
