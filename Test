@@ -1,157 +1,220 @@
---============================================================
--- ROBLOX DUMPER / DEBUG EXPLORER
--- FULL SOURCE - SINGLE LOCALSCRIPT
+--==============================================================
+-- ROBLOX DEBUG TOOL
+-- SINGLE FILE
 --
--- สำหรับ Roblox Studio / เกมที่คุณเป็นเจ้าของ
---============================================================
+-- สำหรับเกมที่คุณเป็นเจ้าของ / Roblox Studio
+--
+-- FEATURES
+--   Explorer / Dumper
+--   Search
+--   Class Filter
+--   Instance Properties
+--   Attributes
+--   Remote Logger
+--   Argument Viewer
+--   Pause / Resume
+--   Clear Logs
+--   Draggable UI
+--==============================================================
 
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
---============================================================
+--==============================================================
 -- CONFIG
---============================================================
+--==============================================================
 
-local MAX_RESULTS = 2000
+local MAX_INSTANCES = 2500
+local MAX_LOGS = 500
 
-local ROOTS = {
-	Workspace = workspace,
-
-	ReplicatedStorage =
-		game:GetService("ReplicatedStorage"),
-
-	ReplicatedFirst =
-		game:GetService("ReplicatedFirst"),
-
-	Players =
-		game:GetService("Players"),
-
-	Lighting =
-		game:GetService("Lighting"),
-
-	SoundService =
-		game:GetService("SoundService"),
-
-	StarterGui =
-		game:GetService("StarterGui"),
-
-	StarterPack =
-		game:GetService("StarterPack"),
-
-	StarterPlayer =
-		game:GetService("StarterPlayer"),
-
-	Teams =
-		game:GetService("Teams"),
-
-	TestService =
-		game:GetService("TestService"),
-}
-
---============================================================
+--==============================================================
 -- STATE
---============================================================
+--==============================================================
+
+local currentRoot = workspace
+local currentFilter = "All"
+local searchText = ""
+
+local instances = {}
+local logs = {}
 
 local selectedInstance = nil
-local currentRoot = workspace
-local currentFilter = ""
-local currentClassFilter = "All"
+local paused = false
 
-local results = {}
+--==============================================================
+-- DEBUG REMOTES
+--==============================================================
 
---============================================================
+local debugFolder =
+	ReplicatedStorage:FindFirstChild("DebugRemotes")
+
+if not debugFolder then
+	debugFolder = Instance.new("Folder")
+	debugFolder.Name = "DebugRemotes"
+	debugFolder.Parent = ReplicatedStorage
+end
+
+local remoteLog
+
+if game:GetService("RunService"):IsServer() then
+
+	remoteLog =
+		debugFolder:FindFirstChild("RemoteLog")
+
+	if not remoteLog then
+		remoteLog = Instance.new("RemoteEvent")
+		remoteLog.Name = "RemoteLog"
+		remoteLog.Parent = debugFolder
+	end
+
+else
+
+	remoteLog =
+		debugFolder:WaitForChild(
+			"RemoteLog",
+			10
+		)
+
+end
+
+--==============================================================
 -- GUI
---============================================================
+--==============================================================
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "RobloxDumper"
+gui.Name = "RobloxDebugTool"
 gui.ResetOnSpawn = false
 gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = PlayerGui
 
 local main = Instance.new("Frame")
-main.Name = "Main"
-main.Size = UDim2.fromOffset(900, 560)
-main.Position = UDim2.new(0.5, -450, 0.5, -280)
-main.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
+main.Size = UDim2.fromOffset(950, 600)
+main.Position =
+	UDim2.new(0.5, -475, 0.5, -300)
+
+main.BackgroundColor3 =
+	Color3.fromRGB(22,22,27)
+
 main.BorderSizePixel = 0
 main.Parent = gui
 
-Instance.new("UICorner", main).CornerRadius =
-	UDim.new(0, 10)
+Instance.new("UICorner",main).CornerRadius =
+	UDim.new(0,10)
 
---============================================================
--- TITLE BAR
---============================================================
+--==============================================================
+-- TITLE
+--==============================================================
 
 local titleBar = Instance.new("Frame")
-titleBar.Size = UDim2.new(1, 0, 0, 42)
+titleBar.Size =
+	UDim2.new(1,0,0,42)
+
 titleBar.BackgroundColor3 =
-	Color3.fromRGB(30, 30, 35)
+	Color3.fromRGB(30,30,36)
+
 titleBar.BorderSizePixel = 0
 titleBar.Parent = main
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, -100, 1, 0)
-title.Position = UDim2.fromOffset(12, 0)
+title.Size =
+	UDim2.new(1,-100,1,0)
+
+title.Position =
+	UDim2.fromOffset(12,0)
+
 title.BackgroundTransparency = 1
-title.Text = "Roblox Dumper / Debug Explorer"
-title.TextColor3 = Color3.fromRGB(255,255,255)
-title.TextSize = 17
+
+title.Text =
+	"Roblox Debug Tool  |  Dumper + Remote Logger"
+
+title.TextColor3 =
+	Color3.fromRGB(255,255,255)
+
+title.TextSize = 16
 title.Font = Enum.Font.GothamBold
-title.TextXAlignment = Enum.TextXAlignment.Left
+
+title.TextXAlignment =
+	Enum.TextXAlignment.Left
+
 title.Parent = titleBar
 
 local close = Instance.new("TextButton")
-close.Size = UDim2.fromOffset(32, 28)
-close.Position = UDim2.new(1, -42, 0, 7)
+
+close.Size =
+	UDim2.fromOffset(32,28)
+
+close.Position =
+	UDim2.new(1,-42,0,7)
+
 close.BackgroundColor3 =
-	Color3.fromRGB(170, 55, 55)
+	Color3.fromRGB(165,55,55)
+
 close.Text = "X"
-close.TextColor3 = Color3.new(1,1,1)
-close.TextSize = 13
+
+close.TextColor3 =
+	Color3.fromRGB(255,255,255)
+
 close.Font = Enum.Font.GothamBold
+close.TextSize = 13
+
 close.BorderSizePixel = 0
 close.Parent = titleBar
 
-Instance.new("UICorner", close).CornerRadius =
-	UDim.new(0, 5)
+Instance.new("UICorner",close).CornerRadius =
+	UDim.new(0,5)
 
 close.MouseButton1Click:Connect(function()
 	gui.Enabled = false
 end)
 
---============================================================
--- ROOT SELECTOR
---============================================================
+--==============================================================
+-- TOP BUTTON BAR
+--==============================================================
 
 local rootBar = Instance.new("Frame")
-rootBar.Size = UDim2.new(1, -20, 0, 38)
-rootBar.Position = UDim2.fromOffset(10, 50)
+
+rootBar.Size =
+	UDim2.new(1,-20,0,36)
+
+rootBar.Position =
+	UDim2.fromOffset(10,50)
+
 rootBar.BackgroundTransparency = 1
 rootBar.Parent = main
 
-local rootLayout = Instance.new("UIListLayout")
+local rootLayout =
+	Instance.new("UIListLayout")
+
 rootLayout.FillDirection =
 	Enum.FillDirection.Horizontal
-rootLayout.Padding = UDim.new(0, 5)
+
+rootLayout.Padding =
+	UDim.new(0,5)
+
 rootLayout.Parent = rootBar
 
-local function makeTopButton(text, width)
+local function topButton(text,width)
 
 	local b = Instance.new("TextButton")
 
-	b.Size = UDim2.fromOffset(width, 32)
+	b.Size =
+		UDim2.fromOffset(width,30)
+
 	b.BackgroundColor3 =
 		Color3.fromRGB(48,48,56)
 
 	b.Text = text
-	b.TextColor3 = Color3.new(1,1,1)
-	b.TextSize = 11
+
+	b.TextColor3 =
+		Color3.fromRGB(235,235,235)
+
+	b.TextSize = 10
 	b.Font = Enum.Font.GothamBold
+
 	b.BorderSizePixel = 0
 	b.Parent = rootBar
 
@@ -161,52 +224,69 @@ local function makeTopButton(text, width)
 	return b
 end
 
---============================================================
+--==============================================================
 -- SEARCH
---============================================================
+--==============================================================
 
-local searchBox = Instance.new("TextBox")
-searchBox.Size = UDim2.new(1, -20, 0, 34)
-searchBox.Position = UDim2.fromOffset(10, 94)
-searchBox.BackgroundColor3 =
-	Color3.fromRGB(38,38,44)
+local search = Instance.new("TextBox")
 
-searchBox.Text = ""
-searchBox.PlaceholderText =
-	"Search Instance / FullName..."
+search.Size =
+	UDim2.new(1,-20,0,34)
 
-searchBox.PlaceholderColor3 =
+search.Position =
+	UDim2.fromOffset(10,91)
+
+search.BackgroundColor3 =
+	Color3.fromRGB(37,37,43)
+
+search.Text = ""
+
+search.PlaceholderText =
+	"Search Instance / FullName / Remote..."
+
+search.PlaceholderColor3 =
 	Color3.fromRGB(120,120,125)
 
-searchBox.TextColor3 =
+search.TextColor3 =
 	Color3.fromRGB(255,255,255)
 
-searchBox.TextSize = 12
-searchBox.Font = Enum.Font.Code
-searchBox.ClearTextOnFocus = false
-searchBox.BorderSizePixel = 0
-searchBox.Parent = main
+search.TextSize = 11
+search.Font = Enum.Font.Code
 
-Instance.new("UICorner",searchBox).CornerRadius =
+search.ClearTextOnFocus = false
+search.BorderSizePixel = 0
+search.Parent = main
+
+Instance.new("UICorner",search).CornerRadius =
 	UDim.new(0,6)
 
---============================================================
--- CLASS FILTER
---============================================================
+--==============================================================
+-- FILTER BAR
+--==============================================================
 
 local filterBar = Instance.new("Frame")
-filterBar.Size = UDim2.new(1,-20,0,32)
-filterBar.Position = UDim2.fromOffset(10,135)
+
+filterBar.Size =
+	UDim2.new(1,-20,0,30)
+
+filterBar.Position =
+	UDim2.fromOffset(10,131)
+
 filterBar.BackgroundTransparency = 1
 filterBar.Parent = main
 
-local filterLayout = Instance.new("UIListLayout")
+local filterLayout =
+	Instance.new("UIListLayout")
+
 filterLayout.FillDirection =
 	Enum.FillDirection.Horizontal
-filterLayout.Padding = UDim.new(0,5)
+
+filterLayout.Padding =
+	UDim.new(0,4)
+
 filterLayout.Parent = filterBar
 
-local classFilters = {
+local filters = {
 	"All",
 	"RemoteEvent",
 	"RemoteFunction",
@@ -219,189 +299,252 @@ local classFilters = {
 
 local filterButtons = {}
 
-local function createFilter(name)
+--==============================================================
+-- MAIN SPLIT
+--==============================================================
 
-	local b = Instance.new("TextButton")
+local left = Instance.new("Frame")
 
-	b.Size = UDim2.fromOffset(100,28)
-	b.BackgroundColor3 =
-		Color3.fromRGB(43,43,50)
+left.Size =
+	UDim2.new(0.55,-15,1,-235)
 
-	b.Text = name
-	b.TextColor3 =
-		Color3.fromRGB(190,190,190)
+left.Position =
+	UDim2.fromOffset(10,168)
 
-	b.TextSize = 10
-	b.Font = Enum.Font.Gotham
-	b.BorderSizePixel = 0
-	b.Parent = filterBar
+left.BackgroundColor3 =
+	Color3.fromRGB(12,12,15)
 
-	Instance.new("UICorner",b).CornerRadius =
-		UDim.new(0,5)
+left.BorderSizePixel = 0
+left.Parent = main
 
-	filterButtons[name] = b
-
-	b.MouseButton1Click:Connect(function()
-
-		currentClassFilter = name
-
-		for _, button in pairs(filterButtons) do
-			button.BackgroundColor3 =
-				Color3.fromRGB(43,43,50)
-
-			button.TextColor3 =
-				Color3.fromRGB(190,190,190)
-		end
-
-		b.BackgroundColor3 =
-			Color3.fromRGB(65,100,170)
-
-		b.TextColor3 =
-			Color3.new(1,1,1)
-
-		task.defer(function()
-			renderResults()
-		end)
-	end)
-end
-
-for _, name in ipairs(classFilters) do
-	createFilter(name)
-end
-
-filterButtons.All.BackgroundColor3 =
-	Color3.fromRGB(65,100,170)
-
-filterButtons.All.TextColor3 =
-	Color3.new(1,1,1)
-
---============================================================
--- LEFT RESULT PANEL
---============================================================
-
-local resultFrame = Instance.new("Frame")
-resultFrame.Size = UDim2.new(0.55,-15,1,-220)
-resultFrame.Position = UDim2.fromOffset(10,175)
-resultFrame.BackgroundColor3 =
-	Color3.fromRGB(13,13,16)
-
-resultFrame.BorderSizePixel = 0
-resultFrame.Parent = main
-
-Instance.new("UICorner",resultFrame).CornerRadius =
+Instance.new("UICorner",left).CornerRadius =
 	UDim.new(0,7)
 
-local resultScroll = Instance.new("ScrollingFrame")
-resultScroll.Size = UDim2.new(1,-8,1,-8)
-resultScroll.Position = UDim2.fromOffset(4,4)
-resultScroll.BackgroundTransparency = 1
-resultScroll.BorderSizePixel = 0
-resultScroll.ScrollBarThickness = 5
-resultScroll.Parent = resultFrame
+local right = Instance.new("Frame")
 
-local resultLayout = Instance.new("UIListLayout")
-resultLayout.Padding = UDim.new(0,3)
-resultLayout.Parent = resultScroll
+right.Size =
+	UDim2.new(0.45,-15,1,-235)
 
---============================================================
--- RIGHT PROPERTY PANEL
---============================================================
+right.Position =
+	UDim2.new(0.55,5,0,168)
 
-local infoFrame = Instance.new("Frame")
-infoFrame.Size = UDim2.new(0.45,-15,1,-220)
-infoFrame.Position = UDim2.new(0.55,5,0,175)
+right.BackgroundColor3 =
+	Color3.fromRGB(12,12,15)
 
-infoFrame.BackgroundColor3 =
-	Color3.fromRGB(13,13,16)
+right.BorderSizePixel = 0
+right.Parent = main
 
-infoFrame.BorderSizePixel = 0
-infoFrame.Parent = main
-
-Instance.new("UICorner",infoFrame).CornerRadius =
+Instance.new("UICorner",right).CornerRadius =
 	UDim.new(0,7)
+
+--==============================================================
+-- INSTANCE LIST
+--==============================================================
+
+local instanceList = Instance.new("ScrollingFrame")
+
+instanceList.Size =
+	UDim2.new(1,-8,1,-8)
+
+instanceList.Position =
+	UDim2.fromOffset(4,4)
+
+instanceList.BackgroundTransparency = 1
+instanceList.BorderSizePixel = 0
+instanceList.ScrollBarThickness = 6
+instanceList.Parent = left
+
+local instanceLayout =
+	Instance.new("UIListLayout")
+
+instanceLayout.Padding =
+	UDim.new(0,3)
+
+instanceLayout.Parent = instanceList
+
+--==============================================================
+-- INFO PANEL
+--==============================================================
 
 local infoTitle = Instance.new("TextLabel")
-infoTitle.Size = UDim2.new(1,-16,0,32)
-infoTitle.Position = UDim2.fromOffset(8,5)
+
+infoTitle.Size =
+	UDim2.new(1,-16,0,30)
+
+infoTitle.Position =
+	UDim2.fromOffset(8,5)
+
 infoTitle.BackgroundTransparency = 1
-infoTitle.Text = "Instance Properties"
+
+infoTitle.Text =
+	"Instance Properties"
+
 infoTitle.TextColor3 =
 	Color3.fromRGB(255,255,255)
 
 infoTitle.TextSize = 13
 infoTitle.Font = Enum.Font.GothamBold
+
 infoTitle.TextXAlignment =
 	Enum.TextXAlignment.Left
 
-infoTitle.Parent = infoFrame
+infoTitle.Parent = right
 
-local infoScroll = Instance.new("ScrollingFrame")
-infoScroll.Size =
-	UDim2.new(1,-10,1,-45)
+local infoList = Instance.new("ScrollingFrame")
 
-infoScroll.Position =
-	UDim2.fromOffset(5,40)
+infoList.Size =
+	UDim2.new(1,-10,1,-42)
 
-infoScroll.BackgroundTransparency = 1
-infoScroll.BorderSizePixel = 0
-infoScroll.ScrollBarThickness = 5
-infoScroll.Parent = infoFrame
+infoList.Position =
+	UDim2.fromOffset(5,38)
 
-local infoLayout = Instance.new("UIListLayout")
-infoLayout.Padding = UDim.new(0,4)
-infoLayout.Parent = infoScroll
+infoList.BackgroundTransparency = 1
+infoList.BorderSizePixel = 0
+infoList.ScrollBarThickness = 5
 
---============================================================
--- STATUS
---============================================================
+infoList.Parent = right
 
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1,-20,0,30)
-status.Position = UDim2.new(0,10,1,-38)
-status.BackgroundTransparency = 1
-status.Text = "Ready"
-status.TextColor3 =
-	Color3.fromRGB(150,150,150)
+local infoLayout =
+	Instance.new("UIListLayout")
 
-status.TextSize = 11
-status.Font = Enum.Font.Code
-status.TextXAlignment =
+infoLayout.Padding =
+	UDim.new(0,4)
+
+infoLayout.Parent = infoList
+
+--==============================================================
+-- LOG PANEL
+--==============================================================
+
+local logPanel = Instance.new("Frame")
+
+logPanel.Size =
+	UDim2.new(1,-20,0,52)
+
+logPanel.Position =
+	UDim2.new(0,10,1,-60)
+
+logPanel.BackgroundColor3 =
+	Color3.fromRGB(28,28,34)
+
+logPanel.BorderSizePixel = 0
+logPanel.Parent = main
+
+Instance.new("UICorner",logPanel).CornerRadius =
+	UDim.new(0,6)
+
+local logStatus = Instance.new("TextLabel")
+
+logStatus.Size =
+	UDim2.new(1,-180,1,0)
+
+logStatus.Position =
+	UDim2.fromOffset(8,0)
+
+logStatus.BackgroundTransparency = 1
+
+logStatus.Text =
+	"Ready | Instances: 0 | Remote Logs: 0"
+
+logStatus.TextColor3 =
+	Color3.fromRGB(170,170,175)
+
+logStatus.TextSize = 11
+logStatus.Font = Enum.Font.Code
+
+logStatus.TextXAlignment =
 	Enum.TextXAlignment.Left
 
-status.Parent = main
+logStatus.Parent = logPanel
 
---============================================================
--- PROPERTY HELPERS
---============================================================
+local pauseButton = Instance.new("TextButton")
+
+pauseButton.Size =
+	UDim2.fromOffset(70,30)
+
+pauseButton.Position =
+	UDim2.new(1,-165,0,11)
+
+pauseButton.BackgroundColor3 =
+	Color3.fromRGB(50,50,58)
+
+pauseButton.Text = "Pause"
+
+pauseButton.TextColor3 =
+	Color3.new(1,1,1)
+
+pauseButton.TextSize = 10
+pauseButton.Font = Enum.Font.GothamBold
+
+pauseButton.BorderSizePixel = 0
+pauseButton.Parent = logPanel
+
+Instance.new("UICorner",pauseButton).CornerRadius =
+	UDim.new(0,5)
+
+local clearButton = Instance.new("TextButton")
+
+clearButton.Size =
+	UDim2.fromOffset(70,30)
+
+clearButton.Position =
+	UDim2.new(1,-88,0,11)
+
+clearButton.BackgroundColor3 =
+	Color3.fromRGB(50,50,58)
+
+clearButton.Text = "Clear"
+
+clearButton.TextColor3 =
+	Color3.new(1,1,1)
+
+clearButton.TextSize = 10
+clearButton.Font = Enum.Font.GothamBold
+
+clearButton.BorderSizePixel = 0
+clearButton.Parent = logPanel
+
+Instance.new("UICorner",clearButton).CornerRadius =
+	UDim.new(0,5)
+
+--==============================================================
+-- INFO HELPERS
+--==============================================================
 
 local function clearInfo()
 
-	for _, child in ipairs(infoScroll:GetChildren()) do
+	for _, child in ipairs(
+		infoList:GetChildren()
+	) do
+
 		if child:IsA("TextLabel") then
 			child:Destroy()
 		end
 	end
 end
 
-local function addInfo(label,value)
+local function addInfo(name,value)
 
 	local row = Instance.new("TextLabel")
 
-	row.Size = UDim2.new(1,-4,0,0)
+	row.Size =
+		UDim2.new(1,-5,0,0)
+
 	row.AutomaticSize =
 		Enum.AutomaticSize.Y
 
 	row.BackgroundColor3 =
-		Color3.fromRGB(31,31,37)
+		Color3.fromRGB(30,30,36)
 
 	row.Text =
-		label .. "\n" .. tostring(value)
+		name .. "\n" .. tostring(value)
 
 	row.TextColor3 =
-		Color3.fromRGB(210,210,210)
+		Color3.fromRGB(215,215,215)
 
-	row.TextSize = 11
+	row.TextSize = 10
 	row.Font = Enum.Font.Code
+
 	row.TextXAlignment =
 		Enum.TextXAlignment.Left
 
@@ -409,22 +552,34 @@ local function addInfo(label,value)
 		Enum.TextYAlignment.Top
 
 	row.TextWrapped = true
-	row.Parent = infoScroll
+
+	row.BorderSizePixel = 0
+	row.Parent = infoList
 
 	Instance.new("UICorner",row).CornerRadius =
 		UDim.new(0,4)
 
-	local pad = Instance.new("UIPadding")
-	pad.PaddingLeft = UDim.new(0,6)
-	pad.PaddingRight = UDim.new(0,6)
-	pad.PaddingTop = UDim.new(0,5)
-	pad.PaddingBottom = UDim.new(0,5)
+	local pad =
+		Instance.new("UIPadding")
+
+	pad.PaddingTop =
+		UDim.new(0,5)
+
+	pad.PaddingBottom =
+		UDim.new(0,5)
+
+	pad.PaddingLeft =
+		UDim.new(0,6)
+
+	pad.PaddingRight =
+		UDim.new(0,6)
+
 	pad.Parent = row
 end
 
---============================================================
--- INSTANCE INFO
---============================================================
+--==============================================================
+-- SHOW INSTANCE
+--==============================================================
 
 local function showInstance(obj)
 
@@ -433,9 +588,6 @@ local function showInstance(obj)
 	clearInfo()
 
 	if not obj then
-		infoTitle.Text =
-			"Instance Properties"
-
 		return
 	end
 
@@ -459,18 +611,26 @@ local function showInstance(obj)
 
 	addInfo(
 		"Parent",
-		obj.Parent and obj.Parent:GetFullName()
+		obj.Parent
+			and obj.Parent:GetFullName()
 			or "nil"
 	)
 
-	-- Attributes
-	local attrs = obj:GetAttributes()
+	addInfo(
+		"Children",
+		#obj:GetChildren()
+	)
 
-	if next(attrs) then
+	-- Attributes
+
+	local attributes =
+		obj:GetAttributes()
+
+	if next(attributes) then
 
 		local lines = {}
 
-		for key,value in pairs(attrs) do
+		for key,value in pairs(attributes) do
 
 			table.insert(
 				lines,
@@ -495,15 +655,8 @@ local function showInstance(obj)
 		)
 	end
 
-	-- Children
-	local children = obj:GetChildren()
+	-- BasePart
 
-	addInfo(
-		"Children",
-		#children
-	)
-
-	-- Position
 	if obj:IsA("BasePart") then
 
 		addInfo(
@@ -514,6 +667,11 @@ local function showInstance(obj)
 		addInfo(
 			"Size",
 			tostring(obj.Size)
+		)
+
+		addInfo(
+			"Anchored",
+			obj.Anchored
 		)
 
 	elseif obj:IsA("Model") then
@@ -528,7 +686,7 @@ local function showInstance(obj)
 
 	task.defer(function()
 
-		infoScroll.CanvasSize =
+		infoList.CanvasSize =
 			UDim2.fromOffset(
 				0,
 				infoLayout.AbsoluteContentSize.Y
@@ -538,32 +696,30 @@ local function showInstance(obj)
 	end)
 end
 
---============================================================
--- RESULT FILTER
---============================================================
+--==============================================================
+-- FILTER
+--==============================================================
 
 local function matches(obj)
 
-	if currentClassFilter ~= "All" then
+	if currentFilter ~= "All" then
 
-		if obj.ClassName
-			~= currentClassFilter then
-
+		if obj.ClassName ~= currentFilter then
 			return false
 		end
 	end
 
-	if currentFilter == "" then
+	if searchText == "" then
 		return true
 	end
 
 	local query =
-		string.lower(currentFilter)
+		string.lower(searchText)
 
 	local name =
 		string.lower(obj.Name)
 
-	local fullName =
+	local full =
 		string.lower(
 			obj:GetFullName()
 		)
@@ -576,21 +732,21 @@ local function matches(obj)
 	) ~= nil
 
 	or string.find(
-		fullName,
+		full,
 		query,
 		1,
 		true
 	) ~= nil
 end
 
---============================================================
--- RENDER
---============================================================
+--==============================================================
+-- RENDER INSTANCE LIST
+--==============================================================
 
-function renderResults()
+local function renderInstances()
 
 	for _, child in ipairs(
-		resultScroll:GetChildren()
+		instanceList:GetChildren()
 	) do
 
 		if child:IsA("TextButton") then
@@ -598,41 +754,42 @@ function renderResults()
 		end
 	end
 
-	local shown = 0
+	local count = 0
 
-	for _, obj in ipairs(results) do
+	for _, obj in ipairs(instances) do
 
-		if shown >= MAX_RESULTS then
+		if count >= MAX_INSTANCES then
 			break
 		end
 
 		if matches(obj) then
 
-			shown += 1
+			count += 1
 
 			local button =
 				Instance.new("TextButton")
 
 			button.Size =
-				UDim2.new(1,-6,0,32)
+				UDim2.new(1,-5,0,30)
 
 			button.BackgroundColor3 =
-				Color3.fromRGB(30,30,36)
+				Color3.fromRGB(29,29,35)
 
 			button.Text =
 				"[" .. obj.ClassName .. "] "
 				.. obj:GetFullName()
 
 			button.TextColor3 =
-				Color3.fromRGB(205,205,205)
+				Color3.fromRGB(210,210,210)
 
-			button.TextSize = 10
+			button.TextSize = 9
 			button.Font = Enum.Font.Code
+
 			button.TextXAlignment =
 				Enum.TextXAlignment.Left
 
 			button.BorderSizePixel = 0
-			button.Parent = resultScroll
+			button.Parent = instanceList
 
 			Instance.new("UICorner",button)
 				.CornerRadius =
@@ -640,12 +797,7 @@ function renderResults()
 
 			button.MouseButton1Click:Connect(
 				function()
-
 					showInstance(obj)
-
-					status.Text =
-						"Selected: "
-						.. obj:GetFullName()
 				end
 			)
 		end
@@ -653,36 +805,34 @@ function renderResults()
 
 	task.defer(function()
 
-		resultScroll.CanvasSize =
+		instanceList.CanvasSize =
 			UDim2.fromOffset(
 				0,
-				resultLayout.AbsoluteContentSize.Y
+				instanceLayout.AbsoluteContentSize.Y
 				+ 10
 			)
 
 	end)
 
-	status.Text =
+	logStatus.Text =
 		"Showing "
-		.. shown
+		.. count
 		.. " / "
-		.. #results
+		.. #instances
+		.. " Instances | Remote Logs: "
+		.. #logs
 end
 
---============================================================
--- DUMP ROOT
---============================================================
+--==============================================================
+-- DUMP
+--==============================================================
 
-local function dumpRoot(root)
+local function dump(root)
 
-	results = {}
+	instances = {}
 
-	status.Text =
-		"Dumping " .. root.Name .. "..."
-
-	-- root itself
 	table.insert(
-		results,
+		instances,
 		root
 	)
 
@@ -691,125 +841,313 @@ local function dumpRoot(root)
 	) do
 
 		table.insert(
-			results,
+			instances,
 			obj
 		)
 
-		if #results >= MAX_RESULTS then
+		if #instances >= MAX_INSTANCES then
 			break
 		end
 	end
 
-	renderResults()
-
-	status.Text =
-		"Dump complete: "
-		.. #results
-		.. " instances"
+	renderInstances()
 
 	print(
-		"[DUMPER]",
+		"[DEBUG DUMP]",
 		root:GetFullName(),
-		"Instances:",
-		#results
+		#instances
 	)
 end
 
---============================================================
+--==============================================================
 -- ROOT BUTTONS
---============================================================
+--==============================================================
 
-local rootNames = {
-	"Workspace",
-	"ReplicatedStorage",
-	"Players",
-	"Lighting",
+local roots = {
+	Workspace = workspace,
+
+	ReplicatedStorage =
+		ReplicatedStorage,
+
+	Players =
+		Players,
+
+	Lighting =
+		game:GetService("Lighting"),
 }
 
-for _, name in ipairs(rootNames) do
+for name,root in pairs(roots) do
 
 	local button =
-		makeTopButton(name,120)
+		topButton(name,120)
 
 	button.MouseButton1Click:Connect(
 		function()
 
-			currentRoot =
-				ROOTS[name]
+			currentRoot = root
 
-			currentFilter =
-				searchBox.Text
-
-			dumpRoot(
-				currentRoot
-			)
+			dump(root)
 		end
 	)
 end
 
 local allButton =
-	makeTopButton("ALL",80)
+	topButton("ALL",70)
 
 allButton.MouseButton1Click:Connect(
 	function()
 
-		results = {}
+		instances = {}
 
-		status.Text =
-			"Dumping all services..."
-
-		for _, root in pairs(ROOTS) do
+		for _,root in pairs(roots) do
 
 			table.insert(
-				results,
+				instances,
 				root
 			)
 
-			for _, obj in ipairs(
+			for _,obj in ipairs(
 				root:GetDescendants()
 			) do
 
-				if #results >= MAX_RESULTS then
-					break
-				end
-
 				table.insert(
-					results,
+					instances,
 					obj
 				)
+
+				if #instances >= MAX_INSTANCES then
+					break
+				end
 			end
 
-			if #results >= MAX_RESULTS then
+			if #instances >= MAX_INSTANCES then
 				break
 			end
 		end
 
-		renderResults()
-
-		status.Text =
-			"ALL dump: "
-			.. #results
-			.. " instances"
+		renderInstances()
 	end
 )
 
---============================================================
+--==============================================================
+-- FILTER BUTTONS
+--==============================================================
+
+for _,filterName in ipairs(filters) do
+
+	local button =
+		Instance.new("TextButton")
+
+	button.Size =
+		UDim2.fromOffset(95,26)
+
+	button.BackgroundColor3 =
+		Color3.fromRGB(43,43,50)
+
+	button.Text =
+		filterName
+
+	button.TextColor3 =
+		Color3.fromRGB(190,190,195)
+
+	button.TextSize = 9
+	button.Font = Enum.Font.GothamBold
+
+	button.BorderSizePixel = 0
+	button.Parent = filterBar
+
+	Instance.new("UICorner",button)
+		.CornerRadius =
+			UDim.new(0,4)
+
+	button.MouseButton1Click:Connect(
+		function()
+
+			currentFilter =
+				filterName
+
+			for _,child in ipairs(
+				filterBar:GetChildren()
+			) do
+
+				if child:IsA("TextButton") then
+
+					child.BackgroundColor3 =
+						Color3.fromRGB(43,43,50)
+				end
+			end
+
+			button.BackgroundColor3 =
+				Color3.fromRGB(65,100,170)
+
+			renderInstances()
+		end
+	)
+end
+
+--==============================================================
 -- SEARCH
---============================================================
+--==============================================================
 
-searchBox:GetPropertyChangedSignal(
+search:GetPropertyChangedSignal(
 	"Text"
-):Connect(function()
+):Connect(
+	function()
 
-	currentFilter =
-		searchBox.Text
+		searchText =
+			search.Text
 
-	renderResults()
-end)
+		renderInstances()
+	end
+)
 
---============================================================
+--==============================================================
+-- REMOTE ARGUMENT FORMATTER
+--==============================================================
+
+local function formatValue(value,depth,seen)
+
+	depth = depth or 0
+	seen = seen or {}
+
+	if depth > 5 then
+		return "<max depth>"
+	end
+
+	local t = typeof(value)
+
+	if t == "nil"
+		or t == "string"
+		or t == "number"
+		or t == "boolean" then
+
+		return tostring(value)
+	end
+
+	if t == "Instance" then
+
+		return "<Instance: "
+			.. value:GetFullName()
+			.. ">"
+	end
+
+	if t == "Vector3"
+		or t == "Vector2"
+		or t == "CFrame"
+		or t == "Color3"
+		or t == "UDim2" then
+
+		return "<"
+			.. t
+			.. "> "
+			.. tostring(value)
+	end
+
+	if t == "table" then
+
+		if seen[value] then
+			return "<circular>"
+		end
+
+		seen[value] = true
+
+		local lines = {"{"}
+
+		for key,item in pairs(value) do
+
+			table.insert(
+				lines,
+				string.rep("  ",depth+1)
+				.. tostring(key)
+				.. " = "
+				.. formatValue(
+					item,
+					depth+1,
+					seen
+				)
+			)
+		end
+
+		table.insert(
+			lines,
+			string.rep("  ",depth)
+			.. "}"
+		)
+
+		seen[value] = nil
+
+		return table.concat(lines,"\n")
+	end
+
+	return tostring(value)
+end
+
+--==============================================================
+-- REMOTE LOGGER
+--==============================================================
+
+if remoteLog then
+
+	remoteLog.OnClientEvent:Connect(
+		function(data)
+
+			if paused then
+				return
+			end
+
+			table.insert(
+				logs,
+				data
+			)
+
+			if #logs > MAX_LOGS then
+
+				table.remove(
+					logs,
+					1
+				)
+			end
+
+			logStatus.Text =
+				"Instances: "
+				.. #instances
+				.. " | Remote Logs: "
+				.. #logs
+		end
+	)
+end
+
+--==============================================================
+-- PAUSE / CLEAR
+--==============================================================
+
+pauseButton.MouseButton1Click:Connect(
+	function()
+
+		paused = not paused
+
+		pauseButton.Text =
+			paused
+				and "Resume"
+				or "Pause"
+	end
+)
+
+clearButton.MouseButton1Click:Connect(
+	function()
+
+		table.clear(logs)
+
+		logStatus.Text =
+			"Instances: "
+			.. #instances
+			.. " | Remote Logs: 0"
+	end
+)
+
+--==============================================================
 -- DRAG
---============================================================
+--==============================================================
 
 local dragging = false
 local dragStart
@@ -818,10 +1156,10 @@ local startPosition
 titleBar.InputBegan:Connect(
 	function(input)
 
-		if input.UserInputType
-			== Enum.UserInputType.MouseButton1
-			or input.UserInputType
-			== Enum.UserInputType.Touch then
+		if input.UserInputType ==
+			Enum.UserInputType.MouseButton1
+			or input.UserInputType ==
+			Enum.UserInputType.Touch then
 
 			dragging = true
 
@@ -834,8 +1172,8 @@ titleBar.InputBegan:Connect(
 			input.Changed:Connect(
 				function()
 
-					if input.UserInputState
-						== Enum.UserInputState.End then
+					if input.UserInputState ==
+						Enum.UserInputState.End then
 
 						dragging = false
 					end
@@ -852,10 +1190,10 @@ UserInputService.InputChanged:Connect(
 			return
 		end
 
-		if input.UserInputType
-			== Enum.UserInputType.MouseMovement
-			or input.UserInputType
-			== Enum.UserInputType.Touch then
+		if input.UserInputType ==
+			Enum.UserInputType.MouseMovement
+			or input.UserInputType ==
+			Enum.UserInputType.Touch then
 
 			local delta =
 				input.Position
@@ -875,24 +1213,24 @@ UserInputService.InputChanged:Connect(
 	end
 )
 
---============================================================
--- START
---============================================================
+--==============================================================
+-- INITIAL
+--==============================================================
 
-dumpRoot(workspace)
+dump(workspace)
 
 print(
-	"========================================"
+	"======================================"
 )
 
 print(
-	" Roblox Dumper loaded"
+	" Roblox Debug Tool Loaded"
 )
 
 print(
-	" For Studio / authorized debugging"
+	" Dumper + Explorer + Remote Logger"
 )
 
 print(
-	"========================================"
+	"======================================"
 )
