@@ -141,12 +141,15 @@ local function setNoclip(state)
 end
 
 -- ================================================
---  SPEED
+--  SPEED — force ทุก frame บายพาส speed limit ตอนถือ Brainrot
 -- ================================================
-RunService.Heartbeat:Connect(function()
+RunService.RenderStepped:Connect(function()
     local char = LocalPlayer.Character; if not char then return end
     local hum = char:FindFirstChildOfClass("Humanoid"); if not hum then return end
-    hum.WalkSpeed = Config.Speed
+    -- RenderStepped เร็วกว่า Heartbeat ทำให้เกม reset speed ไม่ทัน
+    if hum.WalkSpeed ~= Config.Speed then
+        hum.WalkSpeed = Config.Speed
+    end
 end)
 
 -- ================================================
