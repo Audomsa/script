@@ -1,7 +1,9 @@
---========================================================
--- BRAINROT DEBUG / SCANNER
+--============================================================
+-- ROBLOX DUMPER / DEBUG EXPLORER
+-- FULL SOURCE - SINGLE LOCALSCRIPT
+--
 -- สำหรับ Roblox Studio / เกมที่คุณเป็นเจ้าของ
---========================================================
+--============================================================
 
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
@@ -9,573 +11,888 @@ local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
-local selectedTarget = nil
-local homeCFrame = nil
+--============================================================
+-- CONFIG
+--============================================================
 
---========================================================
--- HELPERS
---========================================================
+local MAX_RESULTS = 2000
 
-local function getCharacter()
-	return LocalPlayer.Character
-end
+local ROOTS = {
+	Workspace = workspace,
 
-local function getRoot()
-	local char = getCharacter()
-	return char and char:FindFirstChild("HumanoidRootPart")
-end
+	ReplicatedStorage =
+		game:GetService("ReplicatedStorage"),
 
-local function getPosition(obj)
-	if not obj then
-		return nil
-	end
+	ReplicatedFirst =
+		game:GetService("ReplicatedFirst"),
 
-	if obj:IsA("BasePart") then
-		return obj.Position
-	end
+	Players =
+		game:GetService("Players"),
 
-	if obj:IsA("Model") then
-		return obj:GetPivot().Position
-	end
+	Lighting =
+		game:GetService("Lighting"),
 
-	local part = obj:FindFirstChildWhichIsA("BasePart", true)
-	return part and part.Position
-end
+	SoundService =
+		game:GetService("SoundService"),
 
-local function getValue(obj)
-	return obj:GetAttribute("Value")
-		or obj:GetAttribute("Price")
-		or obj:GetAttribute("Worth")
-		or "?"
-end
+	StarterGui =
+		game:GetService("StarterGui"),
 
-local function getOwner(obj)
-	return obj:GetAttribute("Owner")
-		or obj:GetAttribute("OwnerUserId")
-		or "?"
-end
+	StarterPack =
+		game:GetService("StarterPack"),
 
---========================================================
+	StarterPlayer =
+		game:GetService("StarterPlayer"),
+
+	Teams =
+		game:GetService("Teams"),
+
+	TestService =
+		game:GetService("TestService"),
+}
+
+--============================================================
+-- STATE
+--============================================================
+
+local selectedInstance = nil
+local currentRoot = workspace
+local currentFilter = ""
+local currentClassFilter = "All"
+
+local results = {}
+
+--============================================================
 -- GUI
---========================================================
+--============================================================
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "BrainrotDebugUI"
+gui.Name = "RobloxDumper"
 gui.ResetOnSpawn = false
+gui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 gui.Parent = PlayerGui
 
 local main = Instance.new("Frame")
-main.Size = UDim2.fromOffset(600, 500)
-main.Position = UDim2.new(0.5, -300, 0.5, -250)
-main.BackgroundColor3 = Color3.fromRGB(24,24,28)
+main.Name = "Main"
+main.Size = UDim2.fromOffset(900, 560)
+main.Position = UDim2.new(0.5, -450, 0.5, -280)
+main.BackgroundColor3 = Color3.fromRGB(24, 24, 28)
 main.BorderSizePixel = 0
 main.Parent = gui
 
-Instance.new("UICorner", main).CornerRadius = UDim.new(0,10)
+Instance.new("UICorner", main).CornerRadius =
+	UDim.new(0, 10)
 
---========================================================
--- TITLE
---========================================================
+--============================================================
+-- TITLE BAR
+--============================================================
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 42)
+titleBar.BackgroundColor3 =
+	Color3.fromRGB(30, 30, 35)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = main
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1,-50,0,40)
-title.Position = UDim2.fromOffset(12,5)
+title.Size = UDim2.new(1, -100, 1, 0)
+title.Position = UDim2.fromOffset(12, 0)
 title.BackgroundTransparency = 1
-title.Text = "Brainrot Debug Scanner"
-title.TextColor3 = Color3.new(1,1,1)
-title.TextSize = 18
+title.Text = "Roblox Dumper / Debug Explorer"
+title.TextColor3 = Color3.fromRGB(255,255,255)
+title.TextSize = 17
 title.Font = Enum.Font.GothamBold
 title.TextXAlignment = Enum.TextXAlignment.Left
-title.Parent = main
+title.Parent = titleBar
 
 local close = Instance.new("TextButton")
-close.Size = UDim2.fromOffset(32,28)
-close.Position = UDim2.new(1,-42,0,8)
-close.BackgroundColor3 = Color3.fromRGB(170,55,55)
+close.Size = UDim2.fromOffset(32, 28)
+close.Position = UDim2.new(1, -42, 0, 7)
+close.BackgroundColor3 =
+	Color3.fromRGB(170, 55, 55)
 close.Text = "X"
 close.TextColor3 = Color3.new(1,1,1)
+close.TextSize = 13
 close.Font = Enum.Font.GothamBold
 close.BorderSizePixel = 0
-close.Parent = main
+close.Parent = titleBar
 
-Instance.new("UICorner",close).CornerRadius = UDim.new(0,5)
+Instance.new("UICorner", close).CornerRadius =
+	UDim.new(0, 5)
 
 close.MouseButton1Click:Connect(function()
 	gui.Enabled = false
 end)
 
---========================================================
--- STATUS
---========================================================
+--============================================================
+-- ROOT SELECTOR
+--============================================================
 
-local status = Instance.new("TextLabel")
-status.Size = UDim2.new(1,-20,0,32)
-status.Position = UDim2.fromOffset(10,48)
-status.BackgroundColor3 = Color3.fromRGB(38,38,44)
-status.Text = "Ready"
-status.TextColor3 = Color3.fromRGB(180,180,180)
-status.TextSize = 12
-status.Font = Enum.Font.Gotham
-status.TextXAlignment = Enum.TextXAlignment.Left
-status.Parent = main
+local rootBar = Instance.new("Frame")
+rootBar.Size = UDim2.new(1, -20, 0, 38)
+rootBar.Position = UDim2.fromOffset(10, 50)
+rootBar.BackgroundTransparency = 1
+rootBar.Parent = main
 
-Instance.new("UICorner",status).CornerRadius = UDim.new(0,6)
+local rootLayout = Instance.new("UIListLayout")
+rootLayout.FillDirection =
+	Enum.FillDirection.Horizontal
+rootLayout.Padding = UDim.new(0, 5)
+rootLayout.Parent = rootBar
 
---========================================================
--- BUTTON
---========================================================
+local function makeTopButton(text, width)
 
-local function makeButton(text,x,width)
 	local b = Instance.new("TextButton")
 
-	b.Size = UDim2.fromOffset(width,34)
-	b.Position = UDim2.fromOffset(x,88)
+	b.Size = UDim2.fromOffset(width, 32)
+	b.BackgroundColor3 =
+		Color3.fromRGB(48,48,56)
 
-	b.BackgroundColor3 = Color3.fromRGB(50,50,58)
 	b.Text = text
 	b.TextColor3 = Color3.new(1,1,1)
-	b.TextSize = 12
+	b.TextSize = 11
 	b.Font = Enum.Font.GothamBold
 	b.BorderSizePixel = 0
-	b.Parent = main
+	b.Parent = rootBar
 
-	Instance.new("UICorner",b).CornerRadius = UDim.new(0,6)
+	Instance.new("UICorner",b).CornerRadius =
+		UDim.new(0,5)
 
 	return b
 end
 
-local dumpButton = makeButton("Dump",10,80)
-local scanButton = makeButton("Scan",96,80)
-local homeButton = makeButton("Set Home",182,90)
-local returnButton = makeButton("Return",278,80)
+--============================================================
+-- SEARCH
+--============================================================
 
---========================================================
--- RESULT LIST
---========================================================
+local searchBox = Instance.new("TextBox")
+searchBox.Size = UDim2.new(1, -20, 0, 34)
+searchBox.Position = UDim2.fromOffset(10, 94)
+searchBox.BackgroundColor3 =
+	Color3.fromRGB(38,38,44)
 
-local list = Instance.new("ScrollingFrame")
-list.Size = UDim2.new(1,-20,0,300)
-list.Position = UDim2.fromOffset(10,130)
-list.BackgroundColor3 = Color3.fromRGB(13,13,16)
-list.BorderSizePixel = 0
-list.ScrollBarThickness = 6
-list.Parent = main
+searchBox.Text = ""
+searchBox.PlaceholderText =
+	"Search Instance / FullName..."
 
-Instance.new("UICorner",list).CornerRadius = UDim.new(0,6)
+searchBox.PlaceholderColor3 =
+	Color3.fromRGB(120,120,125)
 
-local layout = Instance.new("UIListLayout")
-layout.Padding = UDim.new(0,4)
-layout.Parent = list
+searchBox.TextColor3 =
+	Color3.fromRGB(255,255,255)
 
-local padding = Instance.new("UIPadding")
-padding.PaddingTop = UDim.new(0,6)
-padding.PaddingLeft = UDim.new(0,6)
-padding.PaddingRight = UDim.new(0,6)
-padding.Parent = list
+searchBox.TextSize = 12
+searchBox.Font = Enum.Font.Code
+searchBox.ClearTextOnFocus = false
+searchBox.BorderSizePixel = 0
+searchBox.Parent = main
 
---========================================================
--- LOG
---========================================================
+Instance.new("UICorner",searchBox).CornerRadius =
+	UDim.new(0,6)
 
-local logBox = Instance.new("TextLabel")
-logBox.Size = UDim2.new(1,-20,0,45)
-logBox.Position = UDim2.fromOffset(10,440)
-logBox.BackgroundTransparency = 1
-logBox.Text = "Log: Ready"
-logBox.TextColor3 = Color3.fromRGB(150,150,150)
-logBox.TextSize = 11
-logBox.Font = Enum.Font.Code
-logBox.TextXAlignment = Enum.TextXAlignment.Left
-logBox.TextWrapped = true
-logBox.Parent = main
+--============================================================
+-- CLASS FILTER
+--============================================================
 
-local function log(msg)
-	logBox.Text = "Log: " .. tostring(msg)
+local filterBar = Instance.new("Frame")
+filterBar.Size = UDim2.new(1,-20,0,32)
+filterBar.Position = UDim2.fromOffset(10,135)
+filterBar.BackgroundTransparency = 1
+filterBar.Parent = main
+
+local filterLayout = Instance.new("UIListLayout")
+filterLayout.FillDirection =
+	Enum.FillDirection.Horizontal
+filterLayout.Padding = UDim.new(0,5)
+filterLayout.Parent = filterBar
+
+local classFilters = {
+	"All",
+	"RemoteEvent",
+	"RemoteFunction",
+	"ModuleScript",
+	"LocalScript",
+	"Script",
+	"Model",
+	"Part",
+}
+
+local filterButtons = {}
+
+local function createFilter(name)
+
+	local b = Instance.new("TextButton")
+
+	b.Size = UDim2.fromOffset(100,28)
+	b.BackgroundColor3 =
+		Color3.fromRGB(43,43,50)
+
+	b.Text = name
+	b.TextColor3 =
+		Color3.fromRGB(190,190,190)
+
+	b.TextSize = 10
+	b.Font = Enum.Font.Gotham
+	b.BorderSizePixel = 0
+	b.Parent = filterBar
+
+	Instance.new("UICorner",b).CornerRadius =
+		UDim.new(0,5)
+
+	filterButtons[name] = b
+
+	b.MouseButton1Click:Connect(function()
+
+		currentClassFilter = name
+
+		for _, button in pairs(filterButtons) do
+			button.BackgroundColor3 =
+				Color3.fromRGB(43,43,50)
+
+			button.TextColor3 =
+				Color3.fromRGB(190,190,190)
+		end
+
+		b.BackgroundColor3 =
+			Color3.fromRGB(65,100,170)
+
+		b.TextColor3 =
+			Color3.new(1,1,1)
+
+		task.defer(function()
+			renderResults()
+		end)
+	end)
 end
 
---========================================================
--- CLEAR LIST
---========================================================
+for _, name in ipairs(classFilters) do
+	createFilter(name)
+end
 
-local function clearList()
-	for _, child in ipairs(list:GetChildren()) do
-		if child:IsA("TextButton") then
+filterButtons.All.BackgroundColor3 =
+	Color3.fromRGB(65,100,170)
+
+filterButtons.All.TextColor3 =
+	Color3.new(1,1,1)
+
+--============================================================
+-- LEFT RESULT PANEL
+--============================================================
+
+local resultFrame = Instance.new("Frame")
+resultFrame.Size = UDim2.new(0.55,-15,1,-220)
+resultFrame.Position = UDim2.fromOffset(10,175)
+resultFrame.BackgroundColor3 =
+	Color3.fromRGB(13,13,16)
+
+resultFrame.BorderSizePixel = 0
+resultFrame.Parent = main
+
+Instance.new("UICorner",resultFrame).CornerRadius =
+	UDim.new(0,7)
+
+local resultScroll = Instance.new("ScrollingFrame")
+resultScroll.Size = UDim2.new(1,-8,1,-8)
+resultScroll.Position = UDim2.fromOffset(4,4)
+resultScroll.BackgroundTransparency = 1
+resultScroll.BorderSizePixel = 0
+resultScroll.ScrollBarThickness = 5
+resultScroll.Parent = resultFrame
+
+local resultLayout = Instance.new("UIListLayout")
+resultLayout.Padding = UDim.new(0,3)
+resultLayout.Parent = resultScroll
+
+--============================================================
+-- RIGHT PROPERTY PANEL
+--============================================================
+
+local infoFrame = Instance.new("Frame")
+infoFrame.Size = UDim2.new(0.45,-15,1,-220)
+infoFrame.Position = UDim2.new(0.55,5,0,175)
+
+infoFrame.BackgroundColor3 =
+	Color3.fromRGB(13,13,16)
+
+infoFrame.BorderSizePixel = 0
+infoFrame.Parent = main
+
+Instance.new("UICorner",infoFrame).CornerRadius =
+	UDim.new(0,7)
+
+local infoTitle = Instance.new("TextLabel")
+infoTitle.Size = UDim2.new(1,-16,0,32)
+infoTitle.Position = UDim2.fromOffset(8,5)
+infoTitle.BackgroundTransparency = 1
+infoTitle.Text = "Instance Properties"
+infoTitle.TextColor3 =
+	Color3.fromRGB(255,255,255)
+
+infoTitle.TextSize = 13
+infoTitle.Font = Enum.Font.GothamBold
+infoTitle.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+infoTitle.Parent = infoFrame
+
+local infoScroll = Instance.new("ScrollingFrame")
+infoScroll.Size =
+	UDim2.new(1,-10,1,-45)
+
+infoScroll.Position =
+	UDim2.fromOffset(5,40)
+
+infoScroll.BackgroundTransparency = 1
+infoScroll.BorderSizePixel = 0
+infoScroll.ScrollBarThickness = 5
+infoScroll.Parent = infoFrame
+
+local infoLayout = Instance.new("UIListLayout")
+infoLayout.Padding = UDim.new(0,4)
+infoLayout.Parent = infoScroll
+
+--============================================================
+-- STATUS
+--============================================================
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1,-20,0,30)
+status.Position = UDim2.new(0,10,1,-38)
+status.BackgroundTransparency = 1
+status.Text = "Ready"
+status.TextColor3 =
+	Color3.fromRGB(150,150,150)
+
+status.TextSize = 11
+status.Font = Enum.Font.Code
+status.TextXAlignment =
+	Enum.TextXAlignment.Left
+
+status.Parent = main
+
+--============================================================
+-- PROPERTY HELPERS
+--============================================================
+
+local function clearInfo()
+
+	for _, child in ipairs(infoScroll:GetChildren()) do
+		if child:IsA("TextLabel") then
 			child:Destroy()
 		end
 	end
 end
 
---========================================================
--- ADD RESULT
---========================================================
+local function addInfo(label,value)
 
-local function addResult(obj, owner, value, distance)
+	local row = Instance.new("TextLabel")
 
-	local button = Instance.new("TextButton")
+	row.Size = UDim2.new(1,-4,0,0)
+	row.AutomaticSize =
+		Enum.AutomaticSize.Y
 
-	button.Size = UDim2.new(1,-4,0,44)
-	button.BackgroundColor3 = Color3.fromRGB(38,38,44)
-	button.BorderSizePixel = 0
+	row.BackgroundColor3 =
+		Color3.fromRGB(31,31,37)
 
-	button.Text =
-		"🧠 "
-		.. obj.Name
-		.. "   | Value: "
-		.. tostring(value)
-		.. "   | "
-		.. tostring(math.floor(distance))
-		.. " studs"
+	row.Text =
+		label .. "\n" .. tostring(value)
 
-	button.TextColor3 = Color3.fromRGB(220,220,220)
-	button.TextSize = 11
-	button.Font = Enum.Font.Gotham
-	button.TextXAlignment = Enum.TextXAlignment.Left
+	row.TextColor3 =
+		Color3.fromRGB(210,210,210)
 
-	button.Parent = list
+	row.TextSize = 11
+	row.Font = Enum.Font.Code
+	row.TextXAlignment =
+		Enum.TextXAlignment.Left
 
-	Instance.new("UICorner",button).CornerRadius =
-		UDim.new(0,5)
+	row.TextYAlignment =
+		Enum.TextYAlignment.Top
 
-	button.MouseButton1Click:Connect(function()
+	row.TextWrapped = true
+	row.Parent = infoScroll
 
-		selectedTarget = obj
+	Instance.new("UICorner",row).CornerRadius =
+		UDim.new(0,4)
 
-		status.Text =
-			"Selected: "
-			.. obj.Name
-
-		status.TextColor3 =
-			Color3.fromRGB(100,180,255)
-
-		log(
-			"Selected "
-			.. obj:GetFullName()
-			.. " | Owner="
-			.. tostring(owner)
-		)
-	end)
+	local pad = Instance.new("UIPadding")
+	pad.PaddingLeft = UDim.new(0,6)
+	pad.PaddingRight = UDim.new(0,6)
+	pad.PaddingTop = UDim.new(0,5)
+	pad.PaddingBottom = UDim.new(0,5)
+	pad.Parent = row
 end
 
---========================================================
--- DUMP
---========================================================
+--============================================================
+-- INSTANCE INFO
+--============================================================
 
-local function dumpWorkspace()
+local function showInstance(obj)
 
-	log("Dumping Workspace...")
+	selectedInstance = obj
 
-	print("========== WORKSPACE DUMP ==========")
+	clearInfo()
 
-	local count = 0
+	if not obj then
+		infoTitle.Text =
+			"Instance Properties"
 
-	for _, obj in ipairs(
-		workspace:GetDescendants()
-	) do
-
-		count += 1
-
-		print(
-			obj.ClassName,
-			obj:GetFullName()
-		)
-	end
-
-	print(
-		"========== TOTAL: "
-		.. count
-		.. " =========="
-	)
-
-	status.Text =
-		"Dump complete: "
-		.. count
-		.. " instances"
-
-	log(
-		"Dumped "
-		.. count
-		.. " instances to Output"
-	)
-end
-
---========================================================
--- SCAN
---========================================================
-
-local function scan()
-
-	clearList()
-
-	local root = getRoot()
-
-	if not root then
-		status.Text = "Character not ready"
 		return
 	end
 
-	local found = 0
+	infoTitle.Text =
+		obj.Name
 
-	-- พยายามหาโฟลเดอร์ Bases
-	local bases = workspace:FindFirstChild("Bases")
+	addInfo(
+		"ClassName",
+		obj.ClassName
+	)
 
-	if bases then
+	addInfo(
+		"Name",
+		obj.Name
+	)
 
-		for _, base in ipairs(
-			bases:GetChildren()
-		) do
+	addInfo(
+		"FullName",
+		obj:GetFullName()
+	)
 
-			local basePos = getPosition(base)
+	addInfo(
+		"Parent",
+		obj.Parent and obj.Parent:GetFullName()
+			or "nil"
+	)
 
-			if basePos then
+	-- Attributes
+	local attrs = obj:GetAttributes()
 
-				for _, obj in ipairs(
-					base:GetDescendants()
-				) do
+	if next(attrs) then
 
-					if obj:IsA("Model")
-						or obj:IsA("BasePart") then
+		local lines = {}
 
-						local value =
-							getValue(obj)
+		for key,value in pairs(attrs) do
 
-						local owner =
-							getOwner(base)
-
-						local pos =
-							getPosition(obj)
-
-						if pos then
-
-							local distance =
-								(root.Position - pos).Magnitude
-
-							-- แสดงเฉพาะ object ที่มี
-							-- Value / Price / Worth
-							if obj:GetAttribute("Value")
-								or obj:GetAttribute("Price")
-								or obj:GetAttribute("Worth") then
-
-								found += 1
-
-								addResult(
-									obj,
-									owner,
-									value,
-									distance
-								)
-							end
-						end
-					end
-				end
-			end
+			table.insert(
+				lines,
+				tostring(key)
+				.. " = "
+				.. tostring(value)
+			)
 		end
+
+		table.sort(lines)
+
+		addInfo(
+			"Attributes",
+			table.concat(lines,"\n")
+		)
 
 	else
 
-		-- fallback:
-		-- scan object ที่มี Value attribute
-		for _, obj in ipairs(
-			workspace:GetDescendants()
-		) do
+		addInfo(
+			"Attributes",
+			"<none>"
+		)
+	end
 
-			if obj:GetAttribute("Value")
-				or obj:GetAttribute("Price")
-				or obj:GetAttribute("Worth") then
+	-- Children
+	local children = obj:GetChildren()
 
-				local pos = getPosition(obj)
+	addInfo(
+		"Children",
+		#children
+	)
 
-				if pos then
+	-- Position
+	if obj:IsA("BasePart") then
 
-					local distance =
-						(root.Position - pos).Magnitude
+		addInfo(
+			"Position",
+			tostring(obj.Position)
+		)
 
-					found += 1
+		addInfo(
+			"Size",
+			tostring(obj.Size)
+		)
 
-					addResult(
-						obj,
-						getOwner(obj),
-						getValue(obj),
-						distance
-					)
-				end
-			end
+	elseif obj:IsA("Model") then
+
+		addInfo(
+			"Pivot",
+			tostring(
+				obj:GetPivot().Position
+			)
+		)
+	end
+
+	task.defer(function()
+
+		infoScroll.CanvasSize =
+			UDim2.fromOffset(
+				0,
+				infoLayout.AbsoluteContentSize.Y
+				+ 10
+			)
+
+	end)
+end
+
+--============================================================
+-- RESULT FILTER
+--============================================================
+
+local function matches(obj)
+
+	if currentClassFilter ~= "All" then
+
+		if obj.ClassName
+			~= currentClassFilter then
+
+			return false
 		end
 	end
 
-	task.wait()
+	if currentFilter == "" then
+		return true
+	end
 
-	list.CanvasSize =
-		UDim2.fromOffset(
-			0,
-			layout.AbsoluteContentSize.Y + 15
+	local query =
+		string.lower(currentFilter)
+
+	local name =
+		string.lower(obj.Name)
+
+	local fullName =
+		string.lower(
+			obj:GetFullName()
 		)
 
+	return string.find(
+		name,
+		query,
+		1,
+		true
+	) ~= nil
+
+	or string.find(
+		fullName,
+		query,
+		1,
+		true
+	) ~= nil
+end
+
+--============================================================
+-- RENDER
+--============================================================
+
+function renderResults()
+
+	for _, child in ipairs(
+		resultScroll:GetChildren()
+	) do
+
+		if child:IsA("TextButton") then
+			child:Destroy()
+		end
+	end
+
+	local shown = 0
+
+	for _, obj in ipairs(results) do
+
+		if shown >= MAX_RESULTS then
+			break
+		end
+
+		if matches(obj) then
+
+			shown += 1
+
+			local button =
+				Instance.new("TextButton")
+
+			button.Size =
+				UDim2.new(1,-6,0,32)
+
+			button.BackgroundColor3 =
+				Color3.fromRGB(30,30,36)
+
+			button.Text =
+				"[" .. obj.ClassName .. "] "
+				.. obj:GetFullName()
+
+			button.TextColor3 =
+				Color3.fromRGB(205,205,205)
+
+			button.TextSize = 10
+			button.Font = Enum.Font.Code
+			button.TextXAlignment =
+				Enum.TextXAlignment.Left
+
+			button.BorderSizePixel = 0
+			button.Parent = resultScroll
+
+			Instance.new("UICorner",button)
+				.CornerRadius =
+					UDim.new(0,4)
+
+			button.MouseButton1Click:Connect(
+				function()
+
+					showInstance(obj)
+
+					status.Text =
+						"Selected: "
+						.. obj:GetFullName()
+				end
+			)
+		end
+	end
+
+	task.defer(function()
+
+		resultScroll.CanvasSize =
+			UDim2.fromOffset(
+				0,
+				resultLayout.AbsoluteContentSize.Y
+				+ 10
+			)
+
+	end)
+
 	status.Text =
-		"Found "
-		.. found
-		.. " possible Brainrot(s)"
+		"Showing "
+		.. shown
+		.. " / "
+		.. #results
+end
 
-	status.TextColor3 =
-		Color3.fromRGB(100,220,130)
+--============================================================
+-- DUMP ROOT
+--============================================================
 
-	log(
-		"Scan complete: "
-		.. found
-		.. " target(s)"
+local function dumpRoot(root)
+
+	results = {}
+
+	status.Text =
+		"Dumping " .. root.Name .. "..."
+
+	-- root itself
+	table.insert(
+		results,
+		root
+	)
+
+	for _, obj in ipairs(
+		root:GetDescendants()
+	) do
+
+		table.insert(
+			results,
+			obj
+		)
+
+		if #results >= MAX_RESULTS then
+			break
+		end
+	end
+
+	renderResults()
+
+	status.Text =
+		"Dump complete: "
+		.. #results
+		.. " instances"
+
+	print(
+		"[DUMPER]",
+		root:GetFullName(),
+		"Instances:",
+		#results
 	)
 end
 
---========================================================
--- HOME
---========================================================
+--============================================================
+-- ROOT BUTTONS
+--============================================================
 
-homeButton.MouseButton1Click:Connect(function()
+local rootNames = {
+	"Workspace",
+	"ReplicatedStorage",
+	"Players",
+	"Lighting",
+}
 
-	local root = getRoot()
+for _, name in ipairs(rootNames) do
 
-	if not root then
-		return
-	end
+	local button =
+		makeTopButton(name,120)
 
-	homeCFrame = root.CFrame
+	button.MouseButton1Click:Connect(
+		function()
 
-	status.Text = "Home position saved"
-	status.TextColor3 =
-		Color3.fromRGB(100,220,130)
+			currentRoot =
+				ROOTS[name]
 
-	log("Home position saved")
-end)
+			currentFilter =
+				searchBox.Text
 
-returnButton.MouseButton1Click:Connect(function()
-
-	local root = getRoot()
-
-	if not root or not homeCFrame then
-		status.Text = "Home position not set"
-		return
-	end
-
-	root.CFrame = homeCFrame
-
-	status.Text = "Returned Home"
-	log("Returned to saved Home")
-end)
-
---========================================================
--- SELECTED TARGET TELEPORT
---========================================================
-
-scanButton.MouseButton1Click:Connect(function()
-	scan()
-end)
-
-dumpButton.MouseButton1Click:Connect(function()
-	dumpWorkspace()
-end)
-
--- Double-click selected target
--- เพื่อใช้ทดสอบ teleport ใน Studio
-local function teleportSelected()
-
-	if not selectedTarget then
-		status.Text = "No target selected"
-		return
-	end
-
-	local root = getRoot()
-	local pos = getPosition(selectedTarget)
-
-	if not root or not pos then
-		return
-	end
-
-	root.CFrame =
-		CFrame.new(
-			pos + Vector3.new(0,3,0)
-		)
-
-	status.Text =
-		"Moved to "
-		.. selectedTarget.Name
-
-	log(
-		"Moved to "
-		.. selectedTarget:GetFullName()
+			dumpRoot(
+				currentRoot
+			)
+		end
 	)
 end
 
---========================================================
--- RIGHT SHIFT = TELEPORT SELECTED
---========================================================
+local allButton =
+	makeTopButton("ALL",80)
 
-UserInputService.InputBegan:Connect(function(input,gpe)
+allButton.MouseButton1Click:Connect(
+	function()
 
-	if gpe then
-		return
+		results = {}
+
+		status.Text =
+			"Dumping all services..."
+
+		for _, root in pairs(ROOTS) do
+
+			table.insert(
+				results,
+				root
+			)
+
+			for _, obj in ipairs(
+				root:GetDescendants()
+			) do
+
+				if #results >= MAX_RESULTS then
+					break
+				end
+
+				table.insert(
+					results,
+					obj
+				)
+			end
+
+			if #results >= MAX_RESULTS then
+				break
+			end
+		end
+
+		renderResults()
+
+		status.Text =
+			"ALL dump: "
+			.. #results
+			.. " instances"
 	end
+)
 
-	if input.KeyCode == Enum.KeyCode.RightShift then
-		teleportSelected()
-	end
+--============================================================
+-- SEARCH
+--============================================================
+
+searchBox:GetPropertyChangedSignal(
+	"Text"
+):Connect(function()
+
+	currentFilter =
+		searchBox.Text
+
+	renderResults()
 end)
 
---========================================================
+--============================================================
 -- DRAG
---========================================================
+--============================================================
 
 local dragging = false
 local dragStart
-local startPos
+local startPosition
 
-title.InputBegan:Connect(function(input)
+titleBar.InputBegan:Connect(
+	function(input)
 
-	if input.UserInputType ==
-		Enum.UserInputType.MouseButton1 then
+		if input.UserInputType
+			== Enum.UserInputType.MouseButton1
+			or input.UserInputType
+			== Enum.UserInputType.Touch then
 
-		dragging = true
+			dragging = true
 
-		dragStart =
-			input.Position
+			dragStart =
+				input.Position
 
-		startPos =
-			main.Position
+			startPosition =
+				main.Position
 
-		input.Changed:Connect(function()
+			input.Changed:Connect(
+				function()
 
-			if input.UserInputState ==
-				Enum.UserInputState.End then
+					if input.UserInputState
+						== Enum.UserInputState.End then
 
-				dragging = false
-			end
-		end)
-	end
-end)
-
-UserInputService.InputChanged:Connect(function(input)
-
-	if not dragging then
-		return
-	end
-
-	if input.UserInputType ==
-		Enum.UserInputType.MouseMovement then
-
-		local delta =
-			input.Position - dragStart
-
-		main.Position =
-			UDim2.new(
-				startPos.X.Scale,
-				startPos.X.Offset + delta.X,
-
-				startPos.Y.Scale,
-				startPos.Y.Offset + delta.Y
+						dragging = false
+					end
+				end
 			)
+		end
 	end
-end)
+)
 
---========================================================
+UserInputService.InputChanged:Connect(
+	function(input)
+
+		if not dragging then
+			return
+		end
+
+		if input.UserInputType
+			== Enum.UserInputType.MouseMovement
+			or input.UserInputType
+			== Enum.UserInputType.Touch then
+
+			local delta =
+				input.Position
+				- dragStart
+
+			main.Position =
+				UDim2.new(
+					startPosition.X.Scale,
+					startPosition.X.Offset
+						+ delta.X,
+
+					startPosition.Y.Scale,
+					startPosition.Y.Offset
+						+ delta.Y
+				)
+		end
+	end
+)
+
+--============================================================
 -- START
---========================================================
+--============================================================
 
-log("Brainrot Debug Scanner ready.")
+dumpRoot(workspace)
+
+print(
+	"========================================"
+)
+
+print(
+	" Roblox Dumper loaded"
+)
+
+print(
+	" For Studio / authorized debugging"
+)
+
+print(
+	"========================================"
+)
