@@ -1,24 +1,31 @@
--- LocalScript
--- StarterPlayer > StarterPlayerScripts
-
 local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local UserInputService = game:GetService("UserInputService")
 
-local LocalPlayer = Players.LocalPlayer
+local player = Players.LocalPlayer
+local teleportRequest = ReplicatedStorage:WaitForChild("TeleportRequest")
+
+--==================================================
+-- DEFAULT POSITION
+--==================================================
+
+local DEFAULT_X = 37.8226318359375
+local DEFAULT_Y = -5.103182792663574
+local DEFAULT_Z = 221.4004669189453
 
 --==================================================
 -- GUI
 --==================================================
 
 local gui = Instance.new("ScreenGui")
-gui.Name = "DebugDumper"
+gui.Name = "TeleportUI"
 gui.ResetOnSpawn = false
-gui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+gui.Parent = player:WaitForChild("PlayerGui")
 
 local main = Instance.new("Frame")
-main.Size = UDim2.fromOffset(300, 390)
-main.Position = UDim2.new(0, 30, 0.5, -195)
-main.BackgroundColor3 = Color3.fromRGB(28, 28, 32)
+main.Size = UDim2.fromOffset(320, 255)
+main.Position = UDim2.new(0.5, -160, 0.5, -127)
+main.BackgroundColor3 = Color3.fromRGB(27, 27, 31)
 main.BorderSizePixel = 0
 main.Parent = gui
 
@@ -31,25 +38,135 @@ corner.Parent = main
 --==================================================
 
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(1, 0, 0, 45)
+title.Size = UDim2.new(1, -50, 0, 42)
+title.Position = UDim2.fromOffset(12, 3)
 title.BackgroundTransparency = 1
-title.Text = "  Debug Dumper"
+title.Text = "Teleport Position"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
-title.TextSize = 20
+title.TextSize = 19
 title.Font = Enum.Font.GothamBold
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = main
 
-local subtitle = Instance.new("TextLabel")
-subtitle.Size = UDim2.new(1, -20, 0, 25)
-subtitle.Position = UDim2.fromOffset(10, 38)
-subtitle.BackgroundTransparency = 1
-subtitle.Text = "Roblox Studio Debug Tool"
-subtitle.TextColor3 = Color3.fromRGB(150, 150, 150)
-subtitle.TextSize = 12
-subtitle.Font = Enum.Font.Gotham
-subtitle.TextXAlignment = Enum.TextXAlignment.Left
-subtitle.Parent = main
+local closeButton = Instance.new("TextButton")
+closeButton.Size = UDim2.fromOffset(32, 28)
+closeButton.Position = UDim2.new(1, -40, 0, 9)
+closeButton.BackgroundColor3 = Color3.fromRGB(170, 55, 55)
+closeButton.Text = "X"
+closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+closeButton.TextSize = 13
+closeButton.Font = Enum.Font.GothamBold
+closeButton.BorderSizePixel = 0
+closeButton.Parent = main
+
+Instance.new("UICorner", closeButton).CornerRadius =
+	UDim.new(0, 5)
+
+closeButton.MouseButton1Click:Connect(function()
+	main.Visible = false
+end)
+
+--==================================================
+-- INPUT
+--==================================================
+
+local function createInput(labelText, value, y)
+
+	local label = Instance.new("TextLabel")
+	label.Size = UDim2.fromOffset(30, 32)
+	label.Position = UDim2.fromOffset(15, y)
+	label.BackgroundTransparency = 1
+	label.Text = labelText
+	label.TextColor3 = Color3.fromRGB(180, 180, 180)
+	label.TextSize = 14
+	label.Font = Enum.Font.GothamBold
+	label.Parent = main
+
+	local box = Instance.new("TextBox")
+	box.Size = UDim2.new(1, -65, 0, 32)
+	box.Position = UDim2.fromOffset(50, y)
+	box.BackgroundColor3 = Color3.fromRGB(44, 44, 51)
+	box.TextColor3 = Color3.fromRGB(255, 255, 255)
+	box.Text = tostring(value)
+	box.TextSize = 13
+	box.Font = Enum.Font.Code
+	box.ClearTextOnFocus = false
+	box.BorderSizePixel = 0
+	box.Parent = main
+
+	Instance.new("UICorner", box).CornerRadius =
+		UDim.new(0, 5)
+
+	return box
+end
+
+local xBox = createInput("X", DEFAULT_X, 50)
+local yBox = createInput("Y", DEFAULT_Y, 88)
+local zBox = createInput("Z", DEFAULT_Z, 126)
+
+--==================================================
+-- TELEPORT BUTTON
+--==================================================
+
+local teleportButton = Instance.new("TextButton")
+teleportButton.Size = UDim2.new(1, -30, 0, 38)
+teleportButton.Position = UDim2.fromOffset(15, 169)
+teleportButton.BackgroundColor3 = Color3.fromRGB(55, 115, 200)
+teleportButton.Text = "TELEPORT"
+teleportButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+teleportButton.TextSize = 14
+teleportButton.Font = Enum.Font.GothamBold
+teleportButton.BorderSizePixel = 0
+teleportButton.Parent = main
+
+Instance.new("UICorner", teleportButton).CornerRadius =
+	UDim.new(0, 6)
+
+local status = Instance.new("TextLabel")
+status.Size = UDim2.new(1, -30, 0, 25)
+status.Position = UDim2.fromOffset(15, 212)
+status.BackgroundTransparency = 1
+status.Text = "Ready"
+status.TextColor3 = Color3.fromRGB(150, 150, 150)
+status.TextSize = 12
+status.Font = Enum.Font.Gotham
+status.Parent = main
+
+--==================================================
+-- TELEPORT
+--==================================================
+
+teleportButton.MouseButton1Click:Connect(function()
+
+	local x = tonumber(xBox.Text)
+	local y = tonumber(yBox.Text)
+	local z = tonumber(zBox.Text)
+
+	if not x or not y or not z then
+
+		status.Text = "Invalid coordinates"
+		status.TextColor3 = Color3.fromRGB(255, 100, 100)
+
+		return
+	end
+
+	status.Text = "Teleporting..."
+	status.TextColor3 = Color3.fromRGB(255, 200, 80)
+
+	teleportRequest:FireServer(x, y, z)
+
+	task.delay(0.3, function()
+
+		status.Text = string.format(
+			"Position: %.2f, %.2f, %.2f",
+			x,
+			y,
+			z
+		)
+
+		status.TextColor3 = Color3.fromRGB(100, 220, 130)
+	end)
+end)
 
 --==================================================
 -- DRAG
@@ -57,7 +174,7 @@ subtitle.Parent = main
 
 local dragging = false
 local dragStart
-local startPos
+local startPosition
 
 title.InputBegan:Connect(function(input)
 
@@ -66,12 +183,14 @@ title.InputBegan:Connect(function(input)
 
 		dragging = true
 		dragStart = input.Position
-		startPos = main.Position
+		startPosition = main.Position
 
 		input.Changed:Connect(function()
+
 			if input.UserInputState == Enum.UserInputState.End then
 				dragging = false
 			end
+
 		end)
 	end
 end)
@@ -88,310 +207,10 @@ UserInputService.InputChanged:Connect(function(input)
 		local delta = input.Position - dragStart
 
 		main.Position = UDim2.new(
-			startPos.X.Scale,
-			startPos.X.Offset + delta.X,
-			startPos.Y.Scale,
-			startPos.Y.Offset + delta.Y
+			startPosition.X.Scale,
+			startPosition.X.Offset + delta.X,
+			startPosition.Y.Scale,
+			startPosition.Y.Offset + delta.Y
 		)
 	end
 end)
-
---==================================================
--- BUTTON CREATOR
---==================================================
-
-local function createButton(text, y, callback)
-
-	local button = Instance.new("TextButton")
-
-	button.Size = UDim2.new(1, -20, 0, 42)
-	button.Position = UDim2.fromOffset(10, y)
-
-	button.BackgroundColor3 = Color3.fromRGB(48, 48, 55)
-	button.TextColor3 = Color3.fromRGB(235, 235, 235)
-
-	button.Text = text
-	button.TextSize = 14
-	button.Font = Enum.Font.GothamMedium
-
-	button.BorderSizePixel = 0
-	button.AutoButtonColor = true
-
-	button.Parent = main
-
-	local c = Instance.new("UICorner")
-	c.CornerRadius = UDim.new(0, 6)
-	c.Parent = button
-
-	button.MouseButton1Click:Connect(function()
-
-		local success, err = pcall(callback)
-
-		if not success then
-			warn("[Debug Dumper Error]", err)
-		end
-	end)
-
-	return button
-end
-
---==================================================
--- DUMP INSTANCE TREE
---==================================================
-
-local function dumpTree(instance, depth, maxDepth)
-
-	depth = depth or 0
-	maxDepth = maxDepth or 4
-
-	if depth > maxDepth then
-		return
-	end
-
-	local indent = string.rep("  ", depth)
-
-	print(
-		indent
-		.. instance.Name
-		.. " ["
-		.. instance.ClassName
-		.. "]"
-	)
-
-	for _, child in ipairs(instance:GetChildren()) do
-		dumpTree(child, depth + 1, maxDepth)
-	end
-end
-
---==================================================
--- DUMP WORKSPACE
---==================================================
-
-local function dumpWorkspace()
-
-	print("================================")
-	print("WORKSPACE DUMP")
-	print("================================")
-
-	dumpTree(workspace, 0, 5)
-
-	print("========== END WORKSPACE ==========")
-end
-
---==================================================
--- DUMP PLAYERS
---==================================================
-
-local function dumpPlayers()
-
-	print("================================")
-	print("PLAYER DUMP")
-	print("================================")
-
-	for _, player in ipairs(Players:GetPlayers()) do
-
-		print("Player:", player.Name)
-		print("DisplayName:", player.DisplayName)
-		print("UserId:", player.UserId)
-		print("Team:", player.Team and player.Team.Name or "None")
-
-		local character = player.Character
-
-		if character then
-
-			print("Character:", character.Name)
-
-			local humanoid =
-				character:FindFirstChildOfClass("Humanoid")
-
-			if humanoid then
-				print("Health:", humanoid.Health)
-				print("MaxHealth:", humanoid.MaxHealth)
-			end
-
-			local root =
-				character:FindFirstChild("HumanoidRootPart")
-
-			if root then
-				print("Position:", root.Position)
-			end
-		else
-			print("Character: None")
-		end
-
-		print("-----------------------------")
-	end
-
-	print("========== END PLAYERS ==========")
-end
-
---==================================================
--- DUMP REMOTES
---==================================================
-
-local function dumpRemotes()
-
-	print("================================")
-	print("REMOTE DUMP")
-	print("================================")
-
-	local count = 0
-
-	for _, instance in ipairs(game:GetDescendants()) do
-
-		if instance:IsA("RemoteEvent")
-			or instance:IsA("RemoteFunction") then
-
-			count += 1
-
-			print(
-				"#"
-				.. count
-				.. " | "
-				.. instance:GetFullName()
-				.. " ["
-				.. instance.ClassName
-				.. "]"
-			)
-		end
-	end
-
-	print("Total Remotes:", count)
-
-	print("========== END REMOTES ==========")
-end
-
---==================================================
--- DUMP ATTRIBUTES
---==================================================
-
-local function dumpAttributes()
-
-	print("================================")
-	print("ATTRIBUTE DUMP")
-	print("================================")
-
-	local count = 0
-
-	for _, instance in ipairs(game:GetDescendants()) do
-
-		local attributes = instance:GetAttributes()
-
-		if next(attributes) then
-
-			count += 1
-
-			print("Instance:", instance:GetFullName())
-
-			for name, value in pairs(attributes) do
-
-				print(
-					"  ",
-					name,
-					"=",
-					value
-				)
-			end
-		end
-	end
-
-	print("Instances with attributes:", count)
-
-	print("========== END ATTRIBUTES ==========")
-end
-
---==================================================
--- DUMP VALUES
---==================================================
-
-local function dumpValues()
-
-	print("================================")
-	print("VALUE OBJECT DUMP")
-	print("================================")
-
-	local valueClasses = {
-		"StringValue",
-		"IntValue",
-		"NumberValue",
-		"BoolValue",
-		"ObjectValue",
-		"Vector3Value",
-		"CFrameValue",
-		"Color3Value"
-	}
-
-	local lookup = {}
-
-	for _, className in ipairs(valueClasses) do
-		lookup[className] = true
-	end
-
-	local count = 0
-
-	for _, instance in ipairs(game:GetDescendants()) do
-
-		if lookup[instance.ClassName] then
-
-			count += 1
-
-			local value
-
-			pcall(function()
-				value = instance.Value
-			end)
-
-			print(
-				instance:GetFullName(),
-				"=",
-				value
-			)
-		end
-	end
-
-	print("Total ValueObjects:", count)
-
-	print("========== END VALUES ==========")
-end
-
---==================================================
--- FULL DUMP
---==================================================
-
-local function fullDump()
-
-	print("")
-	print("########################################")
-	print("#           FULL DEBUG DUMP             #")
-	print("########################################")
-
-	dumpPlayers()
-	dumpRemotes()
-	dumpAttributes()
-	dumpValues()
-	dumpWorkspace()
-
-	print("########################################")
-	print("#          END FULL DEBUG DUMP          #")
-	print("########################################")
-end
-
---==================================================
--- BUTTONS
---==================================================
-
-createButton("Dump Workspace", 75, dumpWorkspace)
-
-createButton("Dump Players", 125, dumpPlayers)
-
-createButton("Dump Remotes", 175, dumpRemotes)
-
-createButton("Dump Attributes", 225, dumpAttributes)
-
-createButton("Dump Values", 275, dumpValues)
-
-local fullButton =
-	createButton("FULL DUMP", 325, fullDump)
-
-fullButton.BackgroundColor3 =
-	Color3.fromRGB(70, 110, 180)
