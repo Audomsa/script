@@ -1,0 +1,293 @@
+-- SimpleSpy V3 — Remote Spy UI
+if _G.SIMPLESPY_LOADED then print("[SimpleSpy] Already loaded!"); return end
+_G.SIMPLESPY_LOADED = true
+
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local HttpService = game:GetService("HttpService")
+
+local guiParent
+pcall(function()
+    local cg = game:GetService("CoreGui")
+    local t = Instance.new("ScreenGui"); t.Parent = cg; t:Destroy()
+    guiParent = cg
+end)
+if not guiParent then guiParent = LocalPlayer:WaitForChild("PlayerGui") end
+local old = guiParent:FindFirstChild("SimpleSpy_UI"); if old then old:Destroy() end
+
+-- ================================================
+--  GUI
+-- ================================================
+local sg = Instance.new("ScreenGui"); sg.Name="SimpleSpy_UI"; sg.ResetOnSpawn=false; sg.Parent=guiParent
+
+local bg = Instance.new("Frame",sg)
+bg.Size=UDim2.new(0,500,0,420); bg.Position=UDim2.new(0.5,-250,0.5,-210)
+bg.BackgroundColor3=Color3.fromRGB(30,30,40); bg.BorderSizePixel=0
+bg.Active=true; bg.Draggable=true
+Instance.new("UICorner",bg).CornerRadius=UDim.new(0,6)
+Instance.new("UIStroke",bg).Color=Color3.fromRGB(60,60,80)
+
+-- Title bar
+local tb=Instance.new("Frame",bg); tb.Size=UDim2.new(1,0,0,28)
+tb.BackgroundColor3=Color3.fromRGB(20,20,30); tb.BorderSizePixel=0
+Instance.new("UICorner",tb).CornerRadius=UDim.new(0,6)
+local tbfix=Instance.new("Frame",tb); tbfix.Size=UDim2.new(1,0,0,8); tbfix.Position=UDim2.new(0,0,1,-8)
+tbfix.BackgroundColor3=Color3.fromRGB(20,20,30); tbfix.BorderSizePixel=0
+local title=Instance.new("TextLabel",tb); title.Size=UDim2.new(1,-30,1,0); title.Position=UDim2.new(0,8,0,0)
+title.BackgroundTransparency=1; title.Text="SimpleSpy V3"
+title.TextColor3=Color3.fromRGB(220,220,255); title.TextSize=13
+title.Font=Enum.Font.GothamBold; title.TextXAlignment=Enum.TextXAlignment.Left
+local closeBtn=Instance.new("TextButton",tb); closeBtn.Size=UDim2.new(0,22,0,22)
+closeBtn.Position=UDim2.new(1,-24,0.5,-11); closeBtn.BackgroundColor3=Color3.fromRGB(180,40,40)
+closeBtn.Text="✕"; closeBtn.TextColor3=Color3.fromRGB(255,255,255); closeBtn.TextSize=12
+closeBtn.Font=Enum.Font.GothamBold; closeBtn.BorderSizePixel=0
+Instance.new("UICorner",closeBtn).CornerRadius=UDim.new(0,4)
+closeBtn.MouseButton1Click:Connect(function() sg:Destroy() end)
+
+-- Log area
+local logFrame=Instance.new("Frame",bg)
+logFrame.Size=UDim2.new(1,-16,1,-120); logFrame.Position=UDim2.new(0,8,0,34)
+logFrame.BackgroundColor3=Color3.fromRGB(18,18,26); logFrame.BorderSizePixel=0
+Instance.new("UICorner",logFrame).CornerRadius=UDim.new(0,4)
+
+local scroll=Instance.new("ScrollingFrame",logFrame)
+scroll.Size=UDim2.new(1,-4,1,-4); scroll.Position=UDim2.new(0,2,0,2)
+scroll.BackgroundTransparency=1; scroll.BorderSizePixel=0
+scroll.ScrollBarThickness=3; scroll.ScrollBarImageColor3=Color3.fromRGB(80,80,120)
+scroll.CanvasSize=UDim2.new(0,0,0,0)
+local ll=Instance.new("UIListLayout",scroll)
+ll.SortOrder=Enum.SortOrder.LayoutOrder; ll.Padding=UDim.new(0,1)
+
+-- Bottom buttons
+local btnFrame=Instance.new("Frame",bg)
+btnFrame.Size=UDim2.new(1,-16,0,80); btnFrame.Position=UDim2.new(0,8,1,-88)
+btnFrame.BackgroundTransparency=1
+
+local btnLayout=Instance.new("UIGridLayout",btnFrame)
+btnLayout.CellSize=UDim2.new(0,110,0,26); btnLayout.CellPadding=UDim2.new(0,4,0,4)
+
+local lineNum=0
+local logs={}  -- เก็บ log ทั้งหมด
+local selectedLog=nil
+
+local function addLog(data)
+    lineNum=lineNum+1
+    logs[lineNum]=data
+
+    local row=Instance.new("TextButton",scroll)
+    row.Size=UDim2.new(1,-4,0,18); row.LayoutOrder=lineNum
+    row.BackgroundColor3=Color3.fromRGB(25,25,35); row.BackgroundTransparency=0.3
+    row.BorderSizePixel=0; row.AutoButtonColor=false
+    row.Text=" "..data.label; row.TextColor3=data.color
+    row.TextSize=11; row.Font=Enum.Font.Code
+    row.TextXAlignment=Enum.TextXAlignment.Left
+    Instance.new("UICorner",row).CornerRadius=UDim.new(0,3)
+
+    row.MouseButton1Click:Connect(function()
+        -- highlight เมื่อเลือก
+        for _, v in ipairs(scroll:GetChildren()) do
+            if v:IsA("TextButton") then
+                v.BackgroundTransparency=0.3
+            end
+        end
+        row.BackgroundTransparency=0
+        row.BackgroundColor3=Color3.fromRGB(60,50,120)
+        selectedLog=data
+    end)
+
+    scroll.CanvasSize=UDim2.new(0,0,0,lineNum*20+10)
+    scroll.CanvasPosition=Vector2.new(0,math.max(0,lineNum*20-scroll.AbsoluteSize.Y))
+end
+
+-- ปุ่ม helper
+local function makeBtn(text, color, onClick)
+    local btn=Instance.new("TextButton",btnFrame)
+    btn.BackgroundColor3=color or Color3.fromRGB(45,45,60)
+    btn.Text=text; btn.TextColor3=Color3.fromRGB(220,220,255)
+    btn.TextSize=11; btn.Font=Enum.Font.GothamSemibold
+    btn.AutoButtonColor=false; btn.BorderSizePixel=0
+    Instance.new("UICorner",btn).CornerRadius=UDim.new(0,4)
+    btn.MouseButton1Click:Connect(onClick)
+    return btn
+end
+
+-- Copy Code
+makeBtn("Copy Code", Color3.fromRGB(40,40,60), function()
+    if not selectedLog then return end
+    setclipboard(selectedLog.code or selectedLog.label)
+    print("[SimpleSpy] Copied!")
+end)
+
+-- Copy Remote
+makeBtn("Copy Remote", Color3.fromRGB(40,40,60), function()
+    if not selectedLog then return end
+    setclipboard(selectedLog.remote or "")
+    print("[SimpleSpy] Remote copied!")
+end)
+
+-- Run Code
+makeBtn("Run Code", Color3.fromRGB(40,70,40), function()
+    if not selectedLog then return end
+    local fn, err = loadstring(selectedLog.code or "")
+    if fn then pcall(fn)
+    else print("[SimpleSpy] Error: " .. tostring(err)) end
+end)
+
+-- Function Info
+makeBtn("Function Info", Color3.fromRGB(40,40,60), function()
+    if not selectedLog then return end
+    print("[SimpleSpy] Remote: " .. tostring(selectedLog.remote))
+    print("[SimpleSpy] Method: " .. tostring(selectedLog.method))
+    print("[SimpleSpy] Args: " .. tostring(selectedLog.argsStr))
+end)
+
+-- Clr Logs
+makeBtn("Clr Logs", Color3.fromRGB(70,30,30), function()
+    for _, v in ipairs(scroll:GetChildren()) do
+        if v:IsA("TextButton") then v:Destroy() end
+    end
+    lineNum=0; logs={}; selectedLog=nil
+    scroll.CanvasSize=UDim2.new(0,0,0,0)
+end)
+
+-- Exclude toggle
+local excludeList={}
+makeBtn("Exclude (l)", Color3.fromRGB(40,40,60), function()
+    if not selectedLog then return end
+    excludeList[selectedLog.remote]=true
+    print("[SimpleSpy] Excluded: " .. tostring(selectedLog.remote))
+end)
+
+makeBtn("Exclude (n)", Color3.fromRGB(40,40,60), function()
+    excludeList={}
+    print("[SimpleSpy] Exclusions cleared")
+end)
+
+-- Block
+local blockList={}
+makeBtn("Block (l)", Color3.fromRGB(60,30,30), function()
+    if not selectedLog then return end
+    blockList[selectedLog.remote]=true
+    print("[SimpleSpy] Blocked: " .. tostring(selectedLog.remote))
+end)
+
+makeBtn("Block (n)", Color3.fromRGB(40,40,60), function()
+    blockList={}
+    print("[SimpleSpy] Block list cleared")
+end)
+
+makeBtn("Clr Blacklist", Color3.fromRGB(50,30,30), function()
+    blockList={}; excludeList={}
+    print("[SimpleSpy] All lists cleared")
+end)
+
+-- ================================================
+--  FORMAT args → Lua code
+-- ================================================
+local function valueToLua(v)
+    local t = typeof(v)
+    if t=="string" then return string.format("%q", v)
+    elseif t=="number" then return tostring(v)
+    elseif t=="boolean" then return tostring(v)
+    elseif t=="Instance" then return 'game:GetService("'..v.ClassName..'") --[['..v:GetFullName()..']]'
+    elseif t=="Vector3" then return string.format("Vector3.new(%g,%g,%g)",v.X,v.Y,v.Z)
+    elseif t=="CFrame" then return string.format("CFrame.new(%g,%g,%g)",v.X,v.Y,v.Z)
+    elseif t=="table" then return "{--[[table]]}"
+    else return tostring(v):sub(1,40) end
+end
+
+local function buildCode(remotePath, method, args)
+    local argStrs={}
+    for _, v in ipairs(args) do table.insert(argStrs, valueToLua(v)) end
+    local argStr=table.concat(argStrs,", ")
+    if method=="FireServer" then
+        return string.format('game:GetService("ReplicatedStorage"):FindFirstChild("%s"):FireServer(%s)',
+            remotePath:match("[^%.]+$") or remotePath, argStr)
+    elseif method=="InvokeServer" then
+        return string.format('game:GetService("ReplicatedStorage"):FindFirstChild("%s"):InvokeServer(%s)',
+            remotePath:match("[^%.]+$") or remotePath, argStr)
+    end
+    return "-- " .. method .. " " .. remotePath
+end
+
+-- ================================================
+--  HOOK __namecall
+-- ================================================
+local blocked_methods = {RunService=true, Heartbeat=true, RenderStepped=true}
+local spam_count={}
+local MAX_SPAM=5
+
+local oldNamecall
+oldNamecall = hookmetamethod(game, "__namecall", function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+
+    if (method=="FireServer" and self:IsA("RemoteEvent")) or
+       (method=="InvokeServer" and self:IsA("RemoteFunction")) then
+
+        local path = self:GetFullName()
+
+        -- skip excluded / blocked
+        if excludeList[path] or blockList[path] then
+            return oldNamecall(self,...)
+        end
+
+        -- spam filter
+        spam_count[path] = (spam_count[path] or 0) + 1
+        if spam_count[path] > MAX_SPAM then
+            task.delay(3, function() spam_count[path]=0 end)
+            return oldNamecall(self,...)
+        end
+
+        local argStrs={}
+        for _, v in ipairs(args) do
+            table.insert(argStrs, typeof(v).."="..tostring(v):sub(1,25))
+        end
+        local argsStr=table.concat(argStrs,", ")
+        local code=buildCode(path, method, args)
+
+        local color
+        if method=="FireServer" then color=Color3.fromRGB(100,255,160)
+        else color=Color3.fromRGB(255,200,80) end
+
+        local label=(method=="FireServer" and "▶ " or "⚡ ")..path
+        if argsStr~="" then label=label.."  ("..argsStr..")" end
+
+        addLog({
+            label=label,
+            remote=path,
+            method=method,
+            argsStr=argsStr,
+            code=code,
+            color=color,
+        })
+    end
+
+    return oldNamecall(self,...)
+end)
+
+-- OnClientEvent
+for _, v in ipairs(game:GetDescendants()) do
+    if v:IsA("RemoteEvent") then
+        pcall(function()
+            v.OnClientEvent:Connect(function(...)
+                local path=v:GetFullName()
+                if excludeList[path] or blockList[path] then return end
+                local args={...}
+                local argStrs={}
+                for _, a in ipairs(args) do
+                    table.insert(argStrs, typeof(a).."="..tostring(a):sub(1,25))
+                end
+                local argsStr=table.concat(argStrs,", ")
+                addLog({
+                    label="◀ "..path..(argsStr~="" and "  ("..argsStr..")" or ""),
+                    remote=path, method="OnClientEvent", argsStr=argsStr,
+                    code="-- OnClientEvent (server→client)",
+                    color=Color3.fromRGB(100,180,255),
+                })
+            end)
+        end)
+    end
+end
+
+print("[SimpleSpy] Ready!")
