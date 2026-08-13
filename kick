@@ -1,0 +1,7 @@
+-- แบบที่ 2: ใช้ตัวแปร
+local kickPower = 9999  -- แก้ตรงนี้
+local isKicking = 1
+
+game:GetService("ReplicatedStorage")
+    .Shared.Packages.Network.rev_KickData
+    :FireServer(kickPower, isKicking)
