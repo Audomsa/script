@@ -1,6 +1,7 @@
--- แบบที่ 1: ตรงๆ เลย
-local args = {
-    [1] = 9999,  -- เปลี่ยนจาก 184 เป็น 9999
-    [2] = 1
-}
-game:GetService("ReplicatedStorage").Shared.Packages.Network.rev_KickData:FireServer(unpack(args))
+-- แบบที่ 2: ใช้ตัวแปร
+local kickPower = 9999  -- แก้ตรงนี้
+local isKicking = 1
+
+game:GetService("ReplicatedStorage")
+    .Shared.Packages.Network.rev_KickData
+    :FireServer(kickPower, isKicking)
