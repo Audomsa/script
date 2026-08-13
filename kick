@@ -1,0 +1,34 @@
+-- Hook rev_KickData — แก้ค่า number ก่อนเกมใช้
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local function findRemote()
+    -- หา rev_KickData
+    local path = ReplicatedStorage
+    for _, name in ipairs({"Shared","Packages","Network"}) do
+        path = path:WaitForChild(name, 5)
+        if not path then print("[Hook] ไม่เจอ " .. name); return nil end
+    end
+    local remote = path:WaitForChild("rev_KickData", 5)
+    if not remote then print("[Hook] ไม่เจอ rev_KickData"); return nil end
+    return remote
+end
+
+local remote = findRemote()
+if not remote then return end
+
+print("[Hook] เจอ rev_KickData แล้ว — กำลัง hook...")
+
+-- ดัก OnClientEvent แล้วแก้ค่า
+remote.OnClientEvent:Connect(function(data)
+    -- แสดงค่าที่ได้รับ
+    if typeof(data) == "table" then
+        for k,v in pairs(data) do
+            print("[KickData] " .. tostring(k) .. " = " .. tostring(v))
+        end
+    else
+        print("[KickData] value = " .. tostring(data))
+    end
+end)
+
+print("[Hook] กำลัง listen rev_KickData...")
+print("[Hook] ลอง kick ดูแล้วดู output ว่า data format เป็นยังไง")
