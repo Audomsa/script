@@ -1,7 +1,7 @@
--- แบบที่ 2: ใช้ตัวแปร
-local kickPower = 9999  -- แก้ตรงนี้
-local isKicking = 1
-
-game:GetService("ReplicatedStorage")
+local remote = game:GetService("ReplicatedStorage")
     .Shared.Packages.Network.rev_KickData
-    :FireServer(kickPower, isKicking)
+
+while true do
+    remote:FireServer(9999, 9999)
+    task.wait(0.01)  -- เร็วมากขึ้น
+end
