@@ -1,7 +1,20 @@
 local remote = game:GetService("ReplicatedStorage")
     .Shared.Packages.Network.rev_KickData
 
+local count = 0
+
 while true do
-    remote:FireServer(9999, 9999)
-    task.wait(0.01)  -- เร็วมากขึ้น
+    count = count + 1
+    
+    local ok, err = pcall(function()
+        remote:FireServer(9999, 9999)
+    end)
+    
+    if ok then
+        print("✅ ยิงสำเร็จ ครั้งที่ " .. count)
+    else
+        print("❌ ยิงไม่ได้! Error: " .. tostring(err))
+    end
+    
+    task.wait(0.5)
 end
